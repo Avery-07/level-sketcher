@@ -117,6 +117,7 @@ public final class PolygonTool implements Tool {
     private void finish(CanvasContext ctx) {
         if (localVertices.size() >= 3) {
             EditablePolygon polygon = new EditablePolygon(localVertices);
+            polygon.setStyle(ctx.currentStyle());
             ctx.execute(new AddElementCommand(sheet, polygon));
             ctx.document().selectElement(sheet, polygon);
         }

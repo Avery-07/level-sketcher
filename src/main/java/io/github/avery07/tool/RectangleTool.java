@@ -49,6 +49,7 @@ public final class RectangleTool implements Tool {
                 && Math.abs(currentLocal.y() - startLocal.y()) >= MIN_SIZE) {
             EditablePolygon rect = EditablePolygon.rectangle(
                     startLocal.x(), startLocal.y(), currentLocal.x(), currentLocal.y());
+            rect.setStyle(ctx.currentStyle());
             ctx.execute(new AddElementCommand(sheet, rect));
             ctx.document().selectElement(sheet, rect);
         }

@@ -49,6 +49,7 @@ public final class CircleTool implements Tool {
         drawing = false;
         if (radiusLocal >= MIN_RADIUS) {
             Circle circle = new Circle(centerLocal, radiusLocal);
+            circle.setStyle(ctx.currentStyle());
             ctx.execute(new AddElementCommand(sheet, circle));
             ctx.document().selectElement(sheet, circle);
         }

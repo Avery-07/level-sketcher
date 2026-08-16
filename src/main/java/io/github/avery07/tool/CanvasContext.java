@@ -4,6 +4,7 @@ import io.github.avery07.command.Command;
 import io.github.avery07.document.Document;
 import io.github.avery07.geometry.Vec2;
 import io.github.avery07.model.Sheet;
+import io.github.avery07.model.Style;
 
 /**
  * The services a {@link Tool} needs from the canvas, without depending on the view layer.
@@ -31,6 +32,9 @@ public interface CanvasContext {
 
     /** World units per screen pixel, for zoom-independent tolerances. */
     double worldPerPixel();
+
+    /** The style newly drawn shapes should adopt. */
+    Style currentStyle();
 
     /** Run a command through the undo manager and mark the document dirty. */
     void execute(Command command);

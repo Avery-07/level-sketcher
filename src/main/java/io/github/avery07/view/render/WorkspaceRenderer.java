@@ -28,20 +28,21 @@ import java.util.List;
 public final class WorkspaceRenderer {
 
     /** Font of the sheet name label; shared so the inline rename editor can match it. */
-    public static final Font LABEL_FONT = Font.font(13);
-    /** Screen offset of the label from the sheet's top-left corner. */
-    public static final double LABEL_DX = 6;
-    public static final double LABEL_DY = 18;
+    public static final Font LABEL_FONT = Font.font(12);
+    /** Screen offset of the label from the sheet's top-left corner (label sits above the frame). */
+    public static final double LABEL_DX = 2;
+    public static final double LABEL_DY = -7;
 
     private static final double GRID_BASE = 40;    // grid spacing in local units at scale 1
     private static final int MAX_GRID_LINES = 400; // per axis, perf guard
     private static final int CIRCLE_SEGMENTS = 64; // polygon approximation for circles
 
-    private static final Color BG = Color.web("#2b2b2b");
-    private static final Color SHEET_FILL = Color.web("#fafafa");
-    private static final Color GRID_COLOR = Color.web("#dddddd");
-    private static final Color LABEL_COLOR = Color.web("#333333");
-    private static final Color BORDER = Color.web("#888888");
+    private static final Color BG = Color.web("#ebecef");
+    private static final Color SHEET_FILL = Color.web("#ffffff");
+    private static final Color GRID_COLOR = Color.web("#e6e7ea");
+    private static final Color LABEL_COLOR = Color.web("#6b7280");
+    private static final Color BORDER = Color.web("#c2c6cd");
+    private static final Color SHADOW = Color.rgb(20, 22, 28, 0.05);
     private static final Color SELECTION = Color.web("#3b82f6");
     private static final Color HANDLE_FILL = Color.WHITE;
 
@@ -120,6 +121,7 @@ public final class WorkspaceRenderer {
         double[] xs = {tl.x(), tr.x(), br.x(), bl.x()};
         double[] ys = {tl.y(), tr.y(), br.y(), bl.y()};
 
+        drawShadow(g, xs, ys);
         g.setFill(SHEET_FILL);
         g.fillPolygon(xs, ys, 4);
 
@@ -140,8 +142,19 @@ public final class WorkspaceRenderer {
         g.fillText(s.name(), tl.x() + LABEL_DX, tl.y() + LABEL_DY);
 
         g.setStroke(BORDER);
-        g.setLineWidth(1.5);
+        g.setLineWidth(1);
         g.strokePolygon(xs, ys, 4);
+    }
+
+    /** A soft drop shadow behind the sheet (a few offset translucent copies). */
+    private void drawShadow(GraphicsContext g, double[] xs, double[] ys) {
+        g.setFill(SHADOW);
+        for (int p = 0; p < 3; p++) {
+            double off = 2 + p * 2;
+            double[] sx = {xs[0] + off, xs[1] + off, xs[2] + off, xs[3] + off};
+            double[] sy = {ys[0] + off, ys[1] + off, ys[2] + off, ys[3] + off};
+            g.fillPolygon(sx, sy, 4);
+        }
     }
 
     /**

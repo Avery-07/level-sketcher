@@ -2,6 +2,7 @@ package io.github.avery07.document;
 
 import io.github.avery07.command.UndoManager;
 import io.github.avery07.model.Sheet;
+import io.github.avery07.model.Style;
 import io.github.avery07.model.Workspace;
 import io.github.avery07.model.element.Element;
 
@@ -29,8 +30,17 @@ public final class Document {
     private Sheet selectedSheet;
     private Element selectedElement;
     private Sheet hoveredSheet;   // transient UI hover, not part of the document
+    private Style currentStyle = Style.DEFAULT; // style applied to newly drawn shapes
     private Path file;      // null until first save
     private boolean dirty;
+
+    public Style currentStyle() {
+        return currentStyle;
+    }
+
+    public void setCurrentStyle(Style style) {
+        this.currentStyle = style;
+    }
 
     public Workspace workspace() {
         return workspace;

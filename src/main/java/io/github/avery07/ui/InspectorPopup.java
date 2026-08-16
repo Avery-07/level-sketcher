@@ -111,7 +111,7 @@ public final class InspectorPopup {
 
     private void applyStyle(Element element, Color stroke, Color fill, double width) {
         Style before = element.style();
-        Style after = new Style(toHex(stroke), fill != null ? toHex(fill) : null, width);
+        Style after = new Style(Colors.toHex(stroke), fill != null ? Colors.toHex(fill) : null, width);
         if (!after.equals(before)) {
             document.undoManager().execute(new SetStyleCommand(element, before, after));
             document.markDirty();
@@ -147,14 +147,6 @@ public final class InspectorPopup {
     }
 
     private static VBox labeled(String caption, Node control) {
-        VBox box = new VBox(2, new Label(caption), control);
-        return box;
-    }
-
-    private static String toHex(Color c) {
-        return String.format("#%02X%02X%02X",
-                (int) Math.round(c.getRed() * 255),
-                (int) Math.round(c.getGreen() * 255),
-                (int) Math.round(c.getBlue() * 255));
+        return new VBox(2, new Label(caption), control);
     }
 }

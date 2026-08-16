@@ -32,10 +32,11 @@ public final class LayersPanel extends VBox {
 
     public LayersPanel(Document document) {
         this.document = document;
+        getStyleClass().add("side-panel");
         setSpacing(6);
         setPadding(new Insets(10));
-        setPrefWidth(190);
-        setMinWidth(190);
+        setPrefWidth(200);
+        setMinWidth(200);
         document.addChangeListener(this::onDocumentChanged);
         rebuild();
     }
@@ -101,10 +102,8 @@ public final class LayersPanel extends VBox {
         });
 
         HBox row = new HBox(6, visible, name);
-        row.setPadding(new Insets(2));
-        if (layer == sheet.activeLayer()) {
-            row.setStyle("-fx-background-color: #e6f0ff; -fx-background-radius: 3;");
-        }
+        row.setPadding(new Insets(3));
+        row.getStyleClass().add(layer == sheet.activeLayer() ? "layer-row-active" : "layer-row");
         return row;
     }
 
@@ -208,7 +207,7 @@ public final class LayersPanel extends VBox {
 
     private static Label title(String text) {
         Label label = new Label(text);
-        label.setStyle("-fx-font-weight: bold;");
+        label.getStyleClass().add("panel-title");
         return label;
     }
 }

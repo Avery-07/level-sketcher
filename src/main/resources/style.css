@@ -1,0 +1,103 @@
+/* LevelSketcher — light, Figma/Miro-style chrome. */
+
+.root {
+    -fx-font-family: "Segoe UI", "Inter", "Helvetica Neue", sans-serif;
+    -fx-font-size: 13px;
+    -fx-background-color: #f7f8fa;
+    -accent: #2f6fed;
+}
+
+/* Top toolbar */
+.tool-bar {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #e6e7eb;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 6 10 6 10;
+    -fx-spacing: 3;
+}
+
+.button,
+.toggle-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 8;
+    -fx-text-fill: #33353a;
+    -fx-padding: 6 10 6 10;
+    -fx-cursor: hand;
+}
+
+.button:hover,
+.toggle-button:hover {
+    -fx-background-color: #eef0f3;
+}
+
+.button:pressed {
+    -fx-background-color: #e2e5ea;
+}
+
+.toggle-button:selected {
+    -fx-background-color: #e7f0ff;
+    -fx-text-fill: -accent;
+}
+
+.tool-icon {
+    -fx-fill: transparent;
+    -fx-stroke: #44474d;
+    -fx-stroke-width: 1.6;
+    -fx-stroke-line-join: round;
+    -fx-stroke-line-cap: round;
+}
+
+.toggle-button:selected .tool-icon {
+    -fx-stroke: -accent;
+}
+
+.toolbar-caption {
+    -fx-text-fill: #8a8d93;
+    -fx-padding: 0 4 0 6;
+}
+
+/* Side panel (layers) */
+.side-panel {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #e6e7eb;
+    -fx-border-width: 0 0 0 1;
+}
+
+.panel-title {
+    -fx-font-weight: bold;
+    -fx-text-fill: #23252a;
+}
+
+.layer-row:hover {
+    -fx-background-color: #f2f4f7;
+    -fx-background-radius: 4;
+}
+
+.layer-row-active {
+    -fx-background-color: #e7f0ff;
+    -fx-background-radius: 4;
+}
+
+/* Inputs */
+.text-field,
+.spinner .text-field {
+    -fx-background-color: white;
+    -fx-background-radius: 6;
+    -fx-border-color: #d7d9de;
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+    -fx-padding: 3 6 3 6;
+}
+
+.text-field:focused {
+    -fx-border-color: -accent;
+}
+
+.spinner {
+    -fx-background-radius: 6;
+}
+
+.color-picker {
+    -fx-background-color: transparent;
+    -fx-background-radius: 6;
+}

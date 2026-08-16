@@ -59,6 +59,7 @@ public final class FreehandTool implements Tool {
         drawing = false;
         if (localPoints.size() >= 2) {
             FreehandStroke stroke = new FreehandStroke(localPoints);
+            stroke.setStyle(ctx.currentStyle());
             ctx.execute(new AddElementCommand(sheet, stroke));
             ctx.document().selectElement(sheet, stroke);
         }

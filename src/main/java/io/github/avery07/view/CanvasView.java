@@ -219,6 +219,11 @@ public final class CanvasView extends StackPane implements CanvasContext {
     }
 
     @Override
+    public io.github.avery07.model.Style currentStyle() {
+        return document.currentStyle();
+    }
+
+    @Override
     public void execute(Command command) {
         document.undoManager().execute(command);
         document.markDirty();
@@ -602,7 +607,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
         Vec2 tl = viewport.toScreen(SheetGeometry.localToWorld(s, s.left(), s.top()));
         double width = Math.max(90, labelWidth(s.name()) + 40);
         nameEditor.setText(s.name());
-        nameEditor.resizeRelocate(tl.x() + WorkspaceRenderer.LABEL_DX, tl.y() + 2, width, 24);
+        nameEditor.resizeRelocate(tl.x(), tl.y() - 23, width, 22);
         nameEditor.setVisible(true);
         nameEditor.requestFocus();
         nameEditor.selectAll();
@@ -636,10 +641,10 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private boolean labelHit(Sheet s, double sx, double sy) {
         Vec2 tl = viewport.toScreen(SheetGeometry.localToWorld(s, s.left(), s.top()));
         double bandWidth = Math.max(labelWidth(s.name()), 60);
-        double x0 = tl.x() + 2;
-        double x1 = tl.x() + WorkspaceRenderer.LABEL_DX + bandWidth + 6;
-        double y0 = tl.y() + 2;
-        double y1 = tl.y() + 24;
+        double x0 = tl.x() - 2;
+        double x1 = tl.x() + bandWidth + 8;
+        double y0 = tl.y() - 22; // the label sits above the frame
+        double y1 = tl.y() - 1;
         return sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1;
     }
 
