@@ -73,8 +73,9 @@ public final class EditablePolygon implements Element {
 
     @Override
     public boolean hitTest(Vec2 local, double tolerance) {
-        return Hit.pointInPolygon(vertices, local)
-                || Hit.minEdgeDistance(vertices, local, true) <= tolerance;
+        // Outline-only: the empty interior is drawable space, not a hit. (When fills arrive,
+        // a filled polygon can also count its interior.)
+        return Hit.minEdgeDistance(vertices, local, true) <= tolerance;
     }
 
     @Override

@@ -64,7 +64,8 @@ public final class Circle implements Element {
 
     @Override
     public boolean hitTest(Vec2 local, double tolerance) {
-        return local.distanceTo(center) <= radius + tolerance;
+        // Ring-only: the empty interior is drawable space, not a hit.
+        return Math.abs(local.distanceTo(center) - radius) <= tolerance;
     }
 
     @Override
