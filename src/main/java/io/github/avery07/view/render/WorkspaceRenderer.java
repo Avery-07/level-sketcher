@@ -122,17 +122,16 @@ public final class WorkspaceRenderer {
     }
 
     /**
-     * Grid anchored to the sheet's fixed local origin, with a single <em>uniform</em> world
-     * spacing — the average of the sheet's two scales times a base. Consequences:
+     * Grid anchored to the sheet's fixed local origin, with a uniform world spacing (the sheet's
+     * scale times a base). Consequences:
      * <ul>
      *   <li>corner-resize grows/shrinks the cells (grid scales with the sheet);</li>
-     *   <li>non-uniform resize keeps the cells square (averaged, not deformed);</li>
      *   <li>edge-extend leaves the scale and the local origin fixed, so existing lines don't
      *       move — the frame just reveals or clips more of the same lattice.</li>
      * </ul>
      */
     private void drawGrid(GraphicsContext g, Sheet s) {
-        double cell = GRID_BASE * (s.scaleX() + s.scaleY()) / 2.0;
+        double cell = GRID_BASE * s.scale();
         if (cell <= 1e-6) {
             return;
         }
@@ -140,10 +139,10 @@ public final class WorkspaceRenderer {
         Vec2 ax = SheetGeometry.axisX(s);
         Vec2 ay = SheetGeometry.axisY(s);
         // Frame extent measured from the local origin, in world units along each axis.
-        double xLo = s.scaleX() * s.left();
-        double xHi = s.scaleX() * s.right();
-        double yLo = s.scaleY() * s.top();
-        double yHi = s.scaleY() * s.bottom();
+        double xLo = s.scale() * s.left();
+        double xHi = s.scale() * s.right();
+        double yLo = s.scale() * s.top();
+        double yHi = s.scale() * s.bottom();
         int kMin = (int) Math.ceil(xLo / cell), kMax = (int) Math.floor(xHi / cell);
         int mMin = (int) Math.ceil(yLo / cell), mMax = (int) Math.floor(yHi / cell);
         if (kMax - kMin > MAX_GRID_LINES || mMax - mMin > MAX_GRID_LINES) {

@@ -21,7 +21,7 @@ public final class SheetGeometry {
         Affine a = new Affine();
         a.appendTranslation(s.center().x(), s.center().y());
         a.appendRotation(Math.toDegrees(s.rotation()));
-        a.appendScale(s.scaleX(), s.scaleY());
+        a.appendScale(s.scale(), s.scale());
         a.appendTranslation(-s.frameCenterX(), -s.frameCenterY());
         return a;
     }

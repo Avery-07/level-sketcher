@@ -16,7 +16,8 @@ import java.util.List;
  * negative coordinates — without moving the content or the local origin: extending an edge only
  * moves that edge (spec §9.2). The two notions of size stay independent:
  * <ul>
- *   <li>{@code scaleX/scaleY} — resize <em>with</em> content (corner handles).</li>
+ *   <li>{@code scale} — uniform resize <em>with</em> content (corner handles). Kept uniform so
+ *       proportions are preserved and content never distorts.</li>
  *   <li>the bounds — the drawable extent; changing them (edge handles) reveals or clips area
  *       without scaling content.</li>
  * </ul>
@@ -27,8 +28,7 @@ public final class Sheet {
     private String name;
     private Vec2 center;      // world coordinates of the frame centre
     private double rotation;  // radians, about the centre
-    private double scaleX;
-    private double scaleY;
+    private double scale;     // uniform scale of the content
     private double left;      // local frame bounds
     private double top;
     private double right;
@@ -42,8 +42,7 @@ public final class Sheet {
         this.top = 0;
         this.right = width;
         this.bottom = height;
-        this.scaleX = 1;
-        this.scaleY = 1;
+        this.scale = 1;
         this.rotation = 0;
     }
 
@@ -71,20 +70,12 @@ public final class Sheet {
         this.rotation = rotation;
     }
 
-    public double scaleX() {
-        return scaleX;
+    public double scale() {
+        return scale;
     }
 
-    public void setScaleX(double scaleX) {
-        this.scaleX = scaleX;
-    }
-
-    public double scaleY() {
-        return scaleY;
-    }
-
-    public void setScaleY(double scaleY) {
-        this.scaleY = scaleY;
+    public void setScale(double scale) {
+        this.scale = scale;
     }
 
     public double left() {
@@ -155,19 +146,18 @@ public final class Sheet {
     }
 
     /** Immutable snapshot of the geometry, used for undo/redo of transforms. */
-    public record State(Vec2 center, double rotation, double scaleX, double scaleY,
+    public record State(Vec2 center, double rotation, double scale,
                         double left, double top, double right, double bottom) {
     }
 
     public State capture() {
-        return new State(center, rotation, scaleX, scaleY, left, top, right, bottom);
+        return new State(center, rotation, scale, left, top, right, bottom);
     }
 
     public void restore(State s) {
         this.center = s.center();
         this.rotation = s.rotation();
-        this.scaleX = s.scaleX();
-        this.scaleY = s.scaleY();
+        this.scale = s.scale();
         this.left = s.left();
         this.top = s.top();
         this.right = s.right();

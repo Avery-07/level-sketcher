@@ -89,8 +89,7 @@ public final class EraserTool implements Tool {
             if (local == null) {
                 continue;
             }
-            double avgScale = Math.max(1e-6, (Math.abs(s.scaleX()) + Math.abs(s.scaleY())) / 2);
-            double tolerance = radiusWorld / avgScale;
+            double tolerance = radiusWorld / Math.max(1e-6, s.scale());
 
             List<Element> hits = null;
             for (Element e : s.elements()) {

@@ -47,9 +47,6 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     private enum Mode { NONE, PAN, SHEET, ELEMENT }
 
-    private record ElementHit(Sheet sheet, Element element) {
-    }
-
     private final Document document;
     private final Viewport viewport = new Viewport();
     private final WorkspaceRenderer renderer;
@@ -261,17 +258,18 @@ public final class CanvasView extends StackPane implements CanvasContext {
             }
         }
 
-        ElementHit eh = topmostElementAt(world);
-        if (eh != null) {
-            document.selectElement(eh.sheet(), eh.element());
-            beginElementMove(eh.sheet(), eh.element(), world);
-            return;
-        }
-
-        Sheet hs = topmostAt(world);
-        if (hs != null) {
-            document.selectSheet(hs);
-            manipulator.beginMove(hs, world);
+        // The topmost sheet under the cursor captures the click, so elements on lower sheets
+        // can't be selected through an overlapping sheet.
+        Sheet captured = topmostAt(world);
+        if (captured != null) {
+            Element hit = topmostElementIn(captured, world);
+            if (hit != null) {
+                document.selectElement(captured, hit);
+                beginElementMove(captured, hit, world);
+                return;
+            }
+            document.selectSheet(captured);
+            manipulator.beginMove(captured, world);
             mode = Mode.SHEET;
             return;
         }
@@ -505,28 +503,24 @@ public final class CanvasView extends StackPane implements CanvasContext {
         return null;
     }
 
-    private ElementHit topmostElementAt(Vec2 world) {
-        var sheets = document.workspace().sheets();
-        for (int i = sheets.size() - 1; i >= 0; i--) {
-            Sheet s = sheets.get(i);
-            Vec2 local = SheetGeometry.worldToLocal(s, world);
-            if (local == null) {
-                continue;
-            }
-            double tol = elementToleranceLocal(s);
-            var elements = s.elements();
-            for (int j = elements.size() - 1; j >= 0; j--) {
-                if (elements.get(j).hitTest(local, tol)) {
-                    return new ElementHit(s, elements.get(j));
-                }
+    /** Topmost element of a single sheet under a world point, or {@code null}. */
+    private Element topmostElementIn(Sheet s, Vec2 world) {
+        Vec2 local = SheetGeometry.worldToLocal(s, world);
+        if (local == null) {
+            return null;
+        }
+        double tol = elementToleranceLocal(s);
+        var elements = s.elements();
+        for (int j = elements.size() - 1; j >= 0; j--) {
+            if (elements.get(j).hitTest(local, tol)) {
+                return elements.get(j);
             }
         }
         return null;
     }
 
     private double elementToleranceLocal(Sheet s) {
-        double avgScale = Math.max(1e-6, (Math.abs(s.scaleX()) + Math.abs(s.scaleY())) / 2);
-        return (ELEMENT_HIT_PIXELS / viewport.zoom()) / avgScale;
+        return (ELEMENT_HIT_PIXELS / viewport.zoom()) / Math.max(1e-6, s.scale());
     }
 
     private String nextSheetName() {

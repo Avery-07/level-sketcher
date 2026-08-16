@@ -10,8 +10,8 @@ import io.github.avery07.model.Sheet;
  *
  * <p>Semantics:
  * <ul>
- *   <li><b>Resize</b> (corner) changes {@code scaleX/scaleY} — content scales with the frame,
- *       with the opposite corner pinned. Shift locks the aspect ratio.</li>
+ *   <li><b>Resize</b> (corner) changes the uniform {@code scale} — content scales
+ *       proportionally with the frame, with the opposite corner pinned.</li>
  *   <li><b>Extend</b> (edge) moves only the grabbed edge (changing that frame bound) while the
  *       opposite edge, the content, and the grid stay fixed in world.</li>
  *   <li><b>Rotate</b> about the frame centre; Shift snaps to 15°.</li>
@@ -33,7 +33,7 @@ final class SheetManipulator {
     private Vec2 pressWorld;
     private Vec2 anchorWorld;   // fixed point (opposite corner/edge) for resize/extend
     private Vec2 axisX, axisY;  // world unit axes at drag start
-    private double startRotation, startScaleX, startScaleY;
+    private double startRotation, startScale;
     private double startAngle;  // rotate
     private double anchorLx, anchorLy, denomX, denomY; // resize
 
@@ -88,7 +88,7 @@ final class SheetManipulator {
         switch (kind) {
             case MOVE -> sheet.setCenter(startState.center().add(world.sub(pressWorld)));
             case ROTATE -> rotate(world, shift);
-            case RESIZE -> resize(world, shift);
+            case RESIZE -> resize(world);
             case EXTEND -> extend(world);
         }
     }
@@ -98,8 +98,7 @@ final class SheetManipulator {
         startState = s.capture();
         pressWorld = world;
         startRotation = s.rotation();
-        startScaleX = s.scaleX();
-        startScaleY = s.scaleY();
+        startScale = s.scale();
         axisX = SheetGeometry.axisX(s);
         axisY = SheetGeometry.axisY(s);
     }
@@ -113,42 +112,36 @@ final class SheetManipulator {
         sheet.setRotation(na);
     }
 
-    private void resize(Vec2 world, boolean lockAspect) {
+    private void resize(Vec2 world) {
+        // Uniform scale: project the pointer onto the frame's (rotated) diagonal from the
+        // pinned corner, so the grabbed corner tracks the pointer while proportions hold.
         double dpx = dot(world, axisX);
         double dpy = dot(world, axisY);
-        double nsx = Math.max(MIN_SCALE, dpx / denomX);
-        double nsy = Math.max(MIN_SCALE, dpy / denomY);
-        if (lockAspect) {
-            double f = Math.max(nsx / startScaleX, nsy / startScaleY);
-            nsx = Math.max(MIN_SCALE, f * startScaleX);
-            nsy = Math.max(MIN_SCALE, f * startScaleY);
-        }
-        sheet.setScaleX(nsx);
-        sheet.setScaleY(nsy);
+        double s = (denomX * dpx + denomY * dpy) / (denomX * denomX + denomY * denomY);
+        sheet.setScale(Math.max(MIN_SCALE, s));
         pinAnchor(anchorLx, anchorLy, anchorWorld);
     }
 
     private void extend(Vec2 world) {
-        double scaleX = startScaleX;
-        double scaleY = startScaleY;
+        double scale = startScale;
         switch (handle) {
             case SheetHandles.RIGHT -> {
-                double newRight = Math.max(sheet.left() + MIN_SIZE, sheet.left() + dot(world, axisX) / scaleX);
+                double newRight = Math.max(sheet.left() + MIN_SIZE, sheet.left() + dot(world, axisX) / scale);
                 sheet.setRight(newRight);
                 pinAnchor(sheet.left(), (sheet.top() + sheet.bottom()) / 2, anchorWorld);
             }
             case SheetHandles.LEFT -> {
-                double newLeft = Math.min(sheet.right() - MIN_SIZE, sheet.right() + dot(world, axisX) / scaleX);
+                double newLeft = Math.min(sheet.right() - MIN_SIZE, sheet.right() + dot(world, axisX) / scale);
                 sheet.setLeft(newLeft);
                 pinAnchor(sheet.right(), (sheet.top() + sheet.bottom()) / 2, anchorWorld);
             }
             case SheetHandles.BOTTOM -> {
-                double newBottom = Math.max(sheet.top() + MIN_SIZE, sheet.top() + dot(world, axisY) / scaleY);
+                double newBottom = Math.max(sheet.top() + MIN_SIZE, sheet.top() + dot(world, axisY) / scale);
                 sheet.setBottom(newBottom);
                 pinAnchor((sheet.left() + sheet.right()) / 2, sheet.top(), anchorWorld);
             }
             case SheetHandles.TOP -> {
-                double newTop = Math.min(sheet.bottom() - MIN_SIZE, sheet.bottom() + dot(world, axisY) / scaleY);
+                double newTop = Math.min(sheet.bottom() - MIN_SIZE, sheet.bottom() + dot(world, axisY) / scale);
                 sheet.setTop(newTop);
                 pinAnchor((sheet.left() + sheet.right()) / 2, sheet.bottom(), anchorWorld);
             }
@@ -158,14 +151,12 @@ final class SheetManipulator {
 
     /** Reposition the centre so the given local point maps back to {@code worldTarget}. */
     private void pinAnchor(double localX, double localY, Vec2 worldTarget) {
-        double lx = localX - sheet.frameCenterX();
-        double ly = localY - sheet.frameCenterY();
-        double sx = sheet.scaleX() * lx;
-        double sy = sheet.scaleY() * ly;
+        double lx = (localX - sheet.frameCenterX()) * sheet.scale();
+        double ly = (localY - sheet.frameCenterY()) * sheet.scale();
         double c = Math.cos(sheet.rotation());
         double sn = Math.sin(sheet.rotation());
-        double rx = sx * c - sy * sn;
-        double ry = sx * sn + sy * c;
+        double rx = lx * c - ly * sn;
+        double ry = lx * sn + ly * c;
         sheet.setCenter(new Vec2(worldTarget.x() - rx, worldTarget.y() - ry));
     }
 
