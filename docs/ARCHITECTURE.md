@@ -43,9 +43,9 @@ io.github.avery07
 ├── document/   Document (open project + selection + dirty state + change events)
 ├── command/    Command, UndoManager, concrete edit commands
 ├── geometry/   Vec2, Transform helpers, hit-testing, bounds
-├── view/       CanvasView, Viewport
-│   ├── render/  Renderer + per-element painters
-│   └── overlay/ handles, marquee, grid
+├── view/       CanvasView (input routing + inline rename editor), Viewport,
+│   │           SheetGeometry, SheetHandles, SheetManipulator (transform math)
+│   └── render/  WorkspaceRenderer (background, sheets, grid, selection + handles)
 ├── tool/       Tool interface, ToolManager, one class per tool
 ├── ui/         Toolbar, Inspector, LayerPanel, SymbolLibraryPanel, MenuBar
 └── io/         Jackson serialization, save/load, image + JSON/SVG export
