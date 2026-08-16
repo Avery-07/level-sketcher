@@ -27,6 +27,11 @@ public final class PolygonTool implements Tool {
     private double cursorX, cursorY;
 
     @Override
+    public boolean inProgress() {
+        return !localVertices.isEmpty();
+    }
+
+    @Override
     public void onPress(CanvasContext ctx, PointerInput p) {
         if (!p.primary()) {
             return;

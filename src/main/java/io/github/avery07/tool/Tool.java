@@ -9,6 +9,22 @@ import javafx.scene.canvas.GraphicsContext;
  */
 public interface Tool {
 
+    /**
+     * True while a multi-click gesture is under way (e.g. an n-gon being placed). The canvas
+     * keeps routing input to the tool instead of letting selection intercept it.
+     */
+    default boolean inProgress() {
+        return false;
+    }
+
+    /**
+     * True if this tool acts <em>on</em> existing shapes and so must receive the click even
+     * over one (the eraser), rather than letting selection intercept it.
+     */
+    default boolean overridesSelection() {
+        return false;
+    }
+
     default void onPress(CanvasContext ctx, PointerInput p) {
     }
 

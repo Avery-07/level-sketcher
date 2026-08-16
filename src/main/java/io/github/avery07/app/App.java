@@ -60,8 +60,8 @@ public final class App extends Application {
         Button redo = new Button("Redo");
         redo.setOnAction(e -> canvas.redo());
 
-        Label hint = new Label("Polygon: click vertices, Enter/double-click to finish · "
-                + "Scroll = zoom · middle-drag = pan");
+        Label hint = new Label("Click a shape to select/edit it (any tool); "
+                + "click empty space to use the active tool · Scroll = zoom · middle-drag = pan");
         hint.setPadding(new Insets(0, 0, 0, 8));
 
         return new ToolBar(select, rectangle, circle, polygon, freehand, erase, new Separator(),

@@ -43,15 +43,17 @@ import java.util.List;
  * It owns the two stacked canvases and the inline rename editor, routes input, and serves as
  * the {@link CanvasContext} for drawing tools.
  *
- * <p>When a drawing {@link Tool} is active, pointer input is forwarded to it. Otherwise the
- * view is in <em>select mode</em>: click an element to select/move it, click a sheet to
- * select/move/resize it, click empty space to pan; double-click a sheet name to rename.
+ * <p>Selection is always available: clicking a shape or a handle selects/edits it regardless of
+ * which {@link Tool} is active. The active tool only takes over when the click lands on empty
+ * space (or the tool is mid-gesture, or it acts on shapes like the eraser). With no tool, empty
+ * clicks fall back to sheet selection and panning. Double-click a sheet name to rename, or a
+ * polygon edge to subdivide it.
  */
 public final class CanvasView extends StackPane implements CanvasContext {
 
     private static final double ELEMENT_HIT_PIXELS = 6;
 
-    private enum Mode { NONE, PAN, SHEET, ELEMENT, ELEMENT_EDIT }
+    private enum Mode { NONE, PAN, SHEET, ELEMENT, ELEMENT_EDIT, TOOL }
 
     private final Document document;
     private final Viewport viewport = new Viewport();
@@ -235,12 +237,13 @@ public final class CanvasView extends StackPane implements CanvasContext {
             beginPan(sx, sy);
             return;
         }
-        if (activeTool != null) {
-            activeTool.onPress(this, pointer(e));
-            requestRender();
+        if (e.getButton() != MouseButton.PRIMARY) {
             return;
         }
-        if (e.getButton() != MouseButton.PRIMARY) {
+
+        // A tool mid-gesture, or one that acts on shapes (eraser), keeps control of the click.
+        if (activeTool != null && (activeTool.inProgress() || activeTool.overridesSelection())) {
+            beginTool(e);
             return;
         }
 
@@ -261,99 +264,138 @@ public final class CanvasView extends StackPane implements CanvasContext {
             }
         }
 
+        // Selection is always available: clicking a shape or handle wins over the active tool.
+        if (trySelectionPress(sx, sy, world)) {
+            return;
+        }
+
+        // Nothing to select: the active drawing tool handles the empty click.
+        if (activeTool != null) {
+            beginTool(e);
+            return;
+        }
+
+        // No tool: click an empty sheet to select it, or empty canvas to deselect and pan.
+        Sheet captured = topmostAt(world);
+        if (captured != null) {
+            document.selectSheet(captured);
+            manipulator.beginMove(captured, world);
+            mode = Mode.SHEET;
+            return;
+        }
+        document.clearSelection();
+        beginPan(sx, sy);
+    }
+
+    private void beginTool(MouseEvent e) {
+        activeTool.onPress(this, pointer(e));
+        mode = Mode.TOOL;
+        requestRender();
+    }
+
+    /**
+     * Attempt a selection/edit gesture — a sheet handle, an element edit handle, or an element
+     * under the cursor (the topmost sheet captures, so overlapped sheets can't be reached
+     * through). Returns true if one started.
+     */
+    private boolean trySelectionPress(double sx, double sy, Vec2 world) {
         Sheet selSheet = document.selectedSheet();
         if (selSheet != null && document.selectedElement() == null) {
             int handle = SheetHandles.hit(selSheet, viewport, sx, sy);
             if (handle >= 0) {
                 manipulator.beginTransform(selSheet, handle, world);
                 mode = Mode.SHEET;
-                return;
+                return true;
             }
         }
-
-        // Edit handles of the selected element (vertex / edge / radius) take priority.
         Element selEl = document.selectedElement();
         if (selEl != null && selSheet != null) {
             ElementHandles.Hit h = ElementHandles.hitTest(selEl, selSheet, viewport, sx, sy);
             if (h != null) {
                 elementEditor.begin(selEl, selSheet, h, SheetGeometry.worldToLocal(selSheet, world));
                 mode = Mode.ELEMENT_EDIT;
-                return;
+                return true;
             }
         }
-
-        // The topmost sheet under the cursor captures the click, so elements on lower sheets
-        // can't be selected through an overlapping sheet.
         Sheet captured = topmostAt(world);
         if (captured != null) {
             Element hit = topmostElementIn(captured, world);
             if (hit != null) {
                 document.selectElement(captured, hit);
                 beginElementMove(captured, hit, world);
-                return;
+                return true;
             }
-            document.selectSheet(captured);
-            manipulator.beginMove(captured, world);
-            mode = Mode.SHEET;
-            return;
         }
-
-        document.clearSelection();
-        beginPan(sx, sy);
+        return false;
     }
 
     private void onDrag(MouseEvent e) {
-        if (mode == Mode.PAN) {
-            viewport.panBy(e.getX() - lastPanX, e.getY() - lastPanY);
-            lastPanX = e.getX();
-            lastPanY = e.getY();
-            requestRender();
-            return;
-        }
-        if (activeTool != null) {
-            activeTool.onDrag(this, pointer(e));
-            requestRender();
-            return;
-        }
-        Vec2 world = worldOf(e.getX(), e.getY());
-        if (mode == Mode.SHEET) {
-            manipulator.update(world, e.isShiftDown());
-            requestRender();
-        } else if (mode == Mode.ELEMENT) {
-            elementMoveDrag(world);
-            requestRender();
-        } else if (mode == Mode.ELEMENT_EDIT && elementEditor.active()) {
-            elementEditor.update(SheetGeometry.worldToLocal(elementEditor.sheet(), world));
-            requestRender();
+        switch (mode) {
+            case PAN -> {
+                viewport.panBy(e.getX() - lastPanX, e.getY() - lastPanY);
+                lastPanX = e.getX();
+                lastPanY = e.getY();
+                requestRender();
+            }
+            case TOOL -> {
+                if (activeTool != null) {
+                    activeTool.onDrag(this, pointer(e));
+                    requestRender();
+                }
+            }
+            case SHEET -> {
+                manipulator.update(worldOf(e.getX(), e.getY()), e.isShiftDown());
+                requestRender();
+            }
+            case ELEMENT -> {
+                elementMoveDrag(worldOf(e.getX(), e.getY()));
+                requestRender();
+            }
+            case ELEMENT_EDIT -> {
+                if (elementEditor.active()) {
+                    elementEditor.update(SheetGeometry.worldToLocal(
+                            elementEditor.sheet(), worldOf(e.getX(), e.getY())));
+                    requestRender();
+                }
+            }
+            default -> { }
         }
     }
 
     private void onRelease(MouseEvent e) {
-        if (mode == Mode.PAN) {
-            mode = Mode.NONE;
-            return;
-        }
-        if (activeTool != null) {
-            activeTool.onRelease(this, pointer(e));
-            requestRender();
-            return;
-        }
-        if (mode == Mode.SHEET && manipulator.active()) {
-            Sheet s = manipulator.sheet();
-            Sheet.State before = manipulator.startState();
-            Sheet.State after = s.capture();
-            if (!after.equals(before)) {
-                execute(new SetSheetStateCommand(s, before, after));
+        switch (mode) {
+            case TOOL -> {
+                if (activeTool != null) {
+                    activeTool.onRelease(this, pointer(e));
+                    requestRender();
+                }
             }
-            manipulator.end();
-        } else if (mode == Mode.ELEMENT && movingElement != null) {
-            commitElementMove();
-        } else if (mode == Mode.ELEMENT_EDIT && elementEditor.active()) {
-            Command c = elementEditor.buildCommand();
-            if (c != null) {
-                execute(c);
+            case SHEET -> {
+                if (manipulator.active()) {
+                    Sheet s = manipulator.sheet();
+                    Sheet.State before = manipulator.startState();
+                    Sheet.State after = s.capture();
+                    if (!after.equals(before)) {
+                        execute(new SetSheetStateCommand(s, before, after));
+                    }
+                    manipulator.end();
+                }
             }
-            elementEditor.end();
+            case ELEMENT -> {
+                if (movingElement != null) {
+                    commitElementMove();
+                }
+            }
+            case ELEMENT_EDIT -> {
+                if (elementEditor.active()) {
+                    Command c = elementEditor.buildCommand();
+                    if (c != null) {
+                        execute(c);
+                    }
+                    elementEditor.end();
+                }
+            }
+            default -> { }
         }
         mode = Mode.NONE;
     }
@@ -375,11 +417,6 @@ public final class CanvasView extends StackPane implements CanvasContext {
             return;
         }
         KeyCode c = e.getCode();
-        if (c == KeyCode.ESCAPE && activeTool != null) {
-            activeTool.cancel(this);
-            requestRender();
-            return;
-        }
         if (e.isShortcutDown() && c == KeyCode.Z) {
             if (e.isShiftDown()) {
                 redo();
@@ -392,8 +429,17 @@ public final class CanvasView extends StackPane implements CanvasContext {
             redo();
             return;
         }
-        // While a drawing tool is active it owns the keys (e.g. Enter/Backspace for the n-gon).
-        if (activeTool != null) {
+        if (c == KeyCode.ESCAPE) {
+            if (activeTool != null && activeTool.inProgress()) {
+                activeTool.cancel(this);
+            } else {
+                document.clearSelection();
+            }
+            requestRender();
+            return;
+        }
+        // A tool mid-gesture owns its keys (Enter/Backspace for the n-gon).
+        if (activeTool != null && activeTool.inProgress()) {
             activeTool.onKey(this, new KeyInput(c, e.isShiftDown()));
             requestRender();
             return;
