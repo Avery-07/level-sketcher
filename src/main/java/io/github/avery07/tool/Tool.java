@@ -15,6 +15,10 @@ public interface Tool {
     default void onDrag(CanvasContext ctx, PointerInput p) {
     }
 
+    /** Pointer moved with no button pressed (for hover previews such as an n-gon rubber band). */
+    default void onMove(CanvasContext ctx, PointerInput p) {
+    }
+
     default void onRelease(CanvasContext ctx, PointerInput p) {
     }
 

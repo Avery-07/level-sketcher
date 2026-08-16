@@ -17,6 +17,7 @@ import io.github.avery07.tool.CircleTool;
 import io.github.avery07.tool.FreehandTool;
 import io.github.avery07.tool.KeyInput;
 import io.github.avery07.tool.PointerInput;
+import io.github.avery07.tool.PolygonTool;
 import io.github.avery07.tool.RectangleTool;
 import io.github.avery07.tool.Tool;
 import io.github.avery07.view.render.WorkspaceRenderer;
@@ -85,6 +86,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
         setOnMousePressed(this::onPress);
         setOnMouseDragged(this::onDrag);
         setOnMouseReleased(this::onRelease);
+        setOnMouseMoved(this::onMove);
         setOnScroll(this::onScroll);
         setOnKeyPressed(this::onKey);
 
@@ -107,6 +109,10 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     public void useFreehandTool() {
         setActiveTool(new FreehandTool());
+    }
+
+    public void usePolygonTool() {
+        setActiveTool(new PolygonTool());
     }
 
     private void setActiveTool(Tool tool) {
@@ -316,6 +322,12 @@ public final class CanvasView extends StackPane implements CanvasContext {
         mode = Mode.NONE;
     }
 
+    private void onMove(MouseEvent e) {
+        if (activeTool != null) {
+            activeTool.onMove(this, pointer(e)); // the tool repaints only if it needs to
+        }
+    }
+
     private void onScroll(ScrollEvent e) {
         double factor = e.getDeltaY() > 0 ? 1.1 : 1 / 1.1;
         viewport.zoomAt(factor, e.getX(), e.getY());
@@ -332,10 +344,6 @@ public final class CanvasView extends StackPane implements CanvasContext {
             requestRender();
             return;
         }
-        if (c == KeyCode.DELETE || c == KeyCode.BACK_SPACE) {
-            deleteSelected();
-            return;
-        }
         if (e.isShortcutDown() && c == KeyCode.Z) {
             if (e.isShiftDown()) {
                 redo();
@@ -348,9 +356,14 @@ public final class CanvasView extends StackPane implements CanvasContext {
             redo();
             return;
         }
+        // While a drawing tool is active it owns the keys (e.g. Enter/Backspace for the n-gon).
         if (activeTool != null) {
             activeTool.onKey(this, new KeyInput(c, e.isShiftDown()));
             requestRender();
+            return;
+        }
+        if (c == KeyCode.DELETE || c == KeyCode.BACK_SPACE) {
+            deleteSelected();
         }
     }
 

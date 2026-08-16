@@ -31,7 +31,7 @@ public final class WorkspaceRenderer {
     public static final double LABEL_DX = 6;
     public static final double LABEL_DY = 18;
 
-    private static final double GRID_WORLD = 40;   // grid spacing in world units
+    private static final double GRID_BASE = 40;    // grid spacing in local units at scale 1
     private static final int MAX_GRID_LINES = 400; // per axis, perf guard
     private static final int CIRCLE_SEGMENTS = 64; // polygon approximation for circles
 
@@ -123,29 +123,35 @@ public final class WorkspaceRenderer {
     }
 
     /**
-     * Grid aligned to the sheet's frame with a constant <em>world</em> spacing — so resizing
-     * (which changes scale) keeps cell size/line-width fixed and simply reveals more or fewer
-     * cells, exactly like extending. Cells stay square even under non-uniform resize.
+     * Grid aligned to the sheet's frame. Cell size scales with the sheet's resize but stays
+     * square: the spacing is a single <em>uniform</em> factor — the average of the sheet's two
+     * scales — applied to a base local spacing. So corner-resize grows/shrinks the cells,
+     * non-uniform resize keeps them square (no deformation), and edge-extend (which leaves the
+     * scale alone) simply reveals more or fewer cells.
      */
     private void drawGrid(GraphicsContext g, Sheet s) {
+        double cell = GRID_BASE * (s.scaleX() + s.scaleY()) / 2.0;
+        if (cell <= 1e-6) {
+            return;
+        }
         Vec2 origin = SheetGeometry.localToWorld(s, 0, 0); // TL in world
         Vec2 ax = SheetGeometry.axisX(s);
         Vec2 ay = SheetGeometry.axisY(s);
         double frameW = s.width() * s.scaleX();
         double frameH = s.height() * s.scaleY();
-        int nx = (int) Math.floor(frameW / GRID_WORLD);
-        int ny = (int) Math.floor(frameH / GRID_WORLD);
+        int nx = (int) Math.floor(frameW / cell);
+        int ny = (int) Math.floor(frameH / cell);
         if (nx > MAX_GRID_LINES || ny > MAX_GRID_LINES) {
             return;
         }
         g.setStroke(GRID_COLOR);
         g.setLineWidth(1);
         for (int i = 0; i <= nx; i++) {
-            Vec2 base = origin.add(ax.scale(i * GRID_WORLD));
+            Vec2 base = origin.add(ax.scale(i * cell));
             line(g, base, base.add(ay.scale(frameH)));
         }
         for (int j = 0; j <= ny; j++) {
-            Vec2 base = origin.add(ay.scale(j * GRID_WORLD));
+            Vec2 base = origin.add(ay.scale(j * cell));
             line(g, base, base.add(ax.scale(frameW)));
         }
     }

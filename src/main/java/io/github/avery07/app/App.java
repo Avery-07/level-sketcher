@@ -46,6 +46,7 @@ public final class App extends Application {
         ToggleButton select = toolButton("Select", tools, canvas::useSelectTool);
         ToggleButton rectangle = toolButton("Rectangle", tools, canvas::useRectangleTool);
         ToggleButton circle = toolButton("Circle", tools, canvas::useCircleTool);
+        ToggleButton polygon = toolButton("Polygon", tools, canvas::usePolygonTool);
         ToggleButton freehand = toolButton("Freehand", tools, canvas::useFreehandTool);
         select.setSelected(true);
 
@@ -58,10 +59,11 @@ public final class App extends Application {
         Button redo = new Button("Redo");
         redo.setOnAction(e -> canvas.redo());
 
-        Label hint = new Label("Scroll = zoom · middle/empty-drag = pan");
+        Label hint = new Label("Polygon: click vertices, Enter/double-click to finish · "
+                + "Scroll = zoom · middle-drag = pan");
         hint.setPadding(new Insets(0, 0, 0, 8));
 
-        return new ToolBar(select, rectangle, circle, freehand, new Separator(),
+        return new ToolBar(select, rectangle, circle, polygon, freehand, new Separator(),
                 addSheet, delete, new Separator(), undo, redo, new Separator(), hint);
     }
 
