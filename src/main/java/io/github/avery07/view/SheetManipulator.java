@@ -4,18 +4,17 @@ import io.github.avery07.geometry.Vec2;
 import io.github.avery07.model.Sheet;
 
 /**
- * Drives an interactive transform of a single {@link Sheet} (move / rotate / resize /
- * extend). The caller feeds world-space pointer positions; this class mutates the sheet and
- * remembers the {@link Sheet.State} at the start so a single undoable command can be built on
- * release.
+ * Drives an interactive transform of a single {@link Sheet} (move / rotate / resize / extend).
+ * The caller feeds world-space pointer positions; this class mutates the sheet and remembers
+ * the {@link Sheet.State} at the start so a single undoable command can be built on release.
  *
  * <p>Semantics:
  * <ul>
  *   <li><b>Resize</b> (corner) changes {@code scaleX/scaleY} — content scales with the frame,
  *       with the opposite corner pinned. Shift locks the aspect ratio.</li>
- *   <li><b>Extend</b> (edge) changes {@code width/height} — content keeps its size while the
- *       frame reveals/clips, with the opposite edge pinned.</li>
- *   <li><b>Rotate</b> about the centre; Shift snaps to 15°.</li>
+ *   <li><b>Extend</b> (edge) moves only the grabbed edge (changing that frame bound) while the
+ *       opposite edge, the content, and the grid stay fixed in world.</li>
+ *   <li><b>Rotate</b> about the frame centre; Shift snaps to 15°.</li>
  *   <li><b>Move</b> translates the centre.</li>
  * </ul>
  */
@@ -32,11 +31,11 @@ final class SheetManipulator {
     private int handle;
 
     private Vec2 pressWorld;
-    private Vec2 anchorWorld;   // fixed point for resize/extend
+    private Vec2 anchorWorld;   // fixed point (opposite corner/edge) for resize/extend
     private Vec2 axisX, axisY;  // world unit axes at drag start
-    private double startRotation, startScaleX, startScaleY, startWidth, startHeight;
+    private double startRotation, startScaleX, startScaleY;
     private double startAngle;  // rotate
-    private double cornerLx, cornerLy, anchorLx, anchorLy; // resize
+    private double anchorLx, anchorLy, denomX, denomY; // resize
 
     boolean active() {
         return sheet != null;
@@ -68,16 +67,16 @@ final class SheetManipulator {
             startAngle = angleTo(s.center(), world);
         } else if (handle <= SheetHandles.BL) {
             kind = Kind.RESIZE;
-            double[] grabbed = SheetHandles.cornerLocal(handle, startWidth, startHeight);
-            double[] anchor = SheetHandles.cornerLocal((handle + 2) % 4, startWidth, startHeight);
-            cornerLx = grabbed[0];
-            cornerLy = grabbed[1];
+            double[] grabbed = corner(s, handle);
+            double[] anchor = corner(s, (handle + 2) % 4);
             anchorLx = anchor[0];
             anchorLy = anchor[1];
+            denomX = grabbed[0] - anchor[0];
+            denomY = grabbed[1] - anchor[1];
             anchorWorld = SheetGeometry.localToWorld(s, anchorLx, anchorLy);
         } else {
             kind = Kind.EXTEND;
-            double[] mid = SheetHandles.oppositeEdgeMid(handle, startWidth, startHeight);
+            double[] mid = oppositeEdgeMid(s, handle);
             anchorWorld = SheetGeometry.localToWorld(s, mid[0], mid[1]);
         }
     }
@@ -101,8 +100,6 @@ final class SheetManipulator {
         startRotation = s.rotation();
         startScaleX = s.scaleX();
         startScaleY = s.scaleY();
-        startWidth = s.width();
-        startHeight = s.height();
         axisX = SheetGeometry.axisX(s);
         axisY = SheetGeometry.axisY(s);
     }
@@ -119,8 +116,8 @@ final class SheetManipulator {
     private void resize(Vec2 world, boolean lockAspect) {
         double dpx = dot(world, axisX);
         double dpy = dot(world, axisY);
-        double nsx = Math.max(MIN_SCALE, dpx / (cornerLx - anchorLx));
-        double nsy = Math.max(MIN_SCALE, dpy / (cornerLy - anchorLy));
+        double nsx = Math.max(MIN_SCALE, dpx / denomX);
+        double nsy = Math.max(MIN_SCALE, dpy / denomY);
         if (lockAspect) {
             double f = Math.max(nsx / startScaleX, nsy / startScaleY);
             nsx = Math.max(MIN_SCALE, f * startScaleX);
@@ -128,53 +125,73 @@ final class SheetManipulator {
         }
         sheet.setScaleX(nsx);
         sheet.setScaleY(nsy);
-        pinAnchor(anchorLx, anchorLy);
+        pinAnchor(anchorLx, anchorLy, anchorWorld);
     }
 
     private void extend(Vec2 world) {
-        double dpx = dot(world, axisX);
-        double dpy = dot(world, axisY);
+        double scaleX = startScaleX;
+        double scaleY = startScaleY;
         switch (handle) {
-            case SheetHandles.TOP -> {
-                double nh = Math.max(MIN_SIZE, -dpy / startScaleY);
-                sheet.setHeight(nh);
-                pinAnchor(sheet.width() / 2, nh);
-            }
-            case SheetHandles.BOTTOM -> {
-                double nh = Math.max(MIN_SIZE, dpy / startScaleY);
-                sheet.setHeight(nh);
-                pinAnchor(sheet.width() / 2, 0);
-            }
             case SheetHandles.RIGHT -> {
-                double nw = Math.max(MIN_SIZE, dpx / startScaleX);
-                sheet.setWidth(nw);
-                pinAnchor(0, sheet.height() / 2);
+                double newRight = Math.max(sheet.left() + MIN_SIZE, sheet.left() + dot(world, axisX) / scaleX);
+                sheet.setRight(newRight);
+                pinAnchor(sheet.left(), (sheet.top() + sheet.bottom()) / 2, anchorWorld);
             }
             case SheetHandles.LEFT -> {
-                double nw = Math.max(MIN_SIZE, -dpx / startScaleX);
-                sheet.setWidth(nw);
-                pinAnchor(nw, sheet.height() / 2);
+                double newLeft = Math.min(sheet.right() - MIN_SIZE, sheet.right() + dot(world, axisX) / scaleX);
+                sheet.setLeft(newLeft);
+                pinAnchor(sheet.right(), (sheet.top() + sheet.bottom()) / 2, anchorWorld);
+            }
+            case SheetHandles.BOTTOM -> {
+                double newBottom = Math.max(sheet.top() + MIN_SIZE, sheet.top() + dot(world, axisY) / scaleY);
+                sheet.setBottom(newBottom);
+                pinAnchor((sheet.left() + sheet.right()) / 2, sheet.top(), anchorWorld);
+            }
+            case SheetHandles.TOP -> {
+                double newTop = Math.min(sheet.bottom() - MIN_SIZE, sheet.bottom() + dot(world, axisY) / scaleY);
+                sheet.setTop(newTop);
+                pinAnchor((sheet.left() + sheet.right()) / 2, sheet.bottom(), anchorWorld);
             }
             default -> { }
         }
     }
 
-    /** Reposition the centre so the given local point maps back to {@link #anchorWorld}. */
-    private void pinAnchor(double localX, double localY) {
-        double lx = localX - sheet.width() / 2;
-        double ly = localY - sheet.height() / 2;
+    /** Reposition the centre so the given local point maps back to {@code worldTarget}. */
+    private void pinAnchor(double localX, double localY, Vec2 worldTarget) {
+        double lx = localX - sheet.frameCenterX();
+        double ly = localY - sheet.frameCenterY();
         double sx = sheet.scaleX() * lx;
         double sy = sheet.scaleY() * ly;
         double c = Math.cos(sheet.rotation());
         double sn = Math.sin(sheet.rotation());
         double rx = sx * c - sy * sn;
         double ry = sx * sn + sy * c;
-        sheet.setCenter(new Vec2(anchorWorld.x() - rx, anchorWorld.y() - ry));
+        sheet.setCenter(new Vec2(worldTarget.x() - rx, worldTarget.y() - ry));
     }
 
     /** Component of (world - anchorWorld) along a world axis. */
     private double dot(Vec2 world, Vec2 axis) {
         return (world.x() - anchorWorld.x()) * axis.x() + (world.y() - anchorWorld.y()) * axis.y();
+    }
+
+    private static double[] corner(Sheet s, int index) {
+        return switch (index) {
+            case SheetHandles.TL -> new double[]{s.left(), s.top()};
+            case SheetHandles.TR -> new double[]{s.right(), s.top()};
+            case SheetHandles.BR -> new double[]{s.right(), s.bottom()};
+            default -> new double[]{s.left(), s.bottom()}; // BL
+        };
+    }
+
+    private static double[] oppositeEdgeMid(Sheet s, int edge) {
+        double midX = (s.left() + s.right()) / 2;
+        double midY = (s.top() + s.bottom()) / 2;
+        return switch (edge) {
+            case SheetHandles.TOP -> new double[]{midX, s.bottom()};
+            case SheetHandles.BOTTOM -> new double[]{midX, s.top()};
+            case SheetHandles.RIGHT -> new double[]{s.left(), midY};
+            default -> new double[]{s.right(), midY}; // LEFT
+        };
     }
 
     private static double angleTo(Vec2 from, Vec2 to) {

@@ -95,11 +95,10 @@ public final class WorkspaceRenderer {
     }
 
     private void drawSheet(GraphicsContext g, Sheet s) {
-        double w = s.width(), h = s.height();
-        Vec2 tl = screen(s, 0, 0);
-        Vec2 tr = screen(s, w, 0);
-        Vec2 br = screen(s, w, h);
-        Vec2 bl = screen(s, 0, h);
+        Vec2 tl = screen(s, s.left(), s.top());
+        Vec2 tr = screen(s, s.right(), s.top());
+        Vec2 br = screen(s, s.right(), s.bottom());
+        Vec2 bl = screen(s, s.left(), s.bottom());
         double[] xs = {tl.x(), tr.x(), br.x(), bl.x()};
         double[] ys = {tl.y(), tr.y(), br.y(), bl.y()};
 
@@ -123,36 +122,42 @@ public final class WorkspaceRenderer {
     }
 
     /**
-     * Grid aligned to the sheet's frame. Cell size scales with the sheet's resize but stays
-     * square: the spacing is a single <em>uniform</em> factor — the average of the sheet's two
-     * scales — applied to a base local spacing. So corner-resize grows/shrinks the cells,
-     * non-uniform resize keeps them square (no deformation), and edge-extend (which leaves the
-     * scale alone) simply reveals more or fewer cells.
+     * Grid anchored to the sheet's fixed local origin, with a single <em>uniform</em> world
+     * spacing — the average of the sheet's two scales times a base. Consequences:
+     * <ul>
+     *   <li>corner-resize grows/shrinks the cells (grid scales with the sheet);</li>
+     *   <li>non-uniform resize keeps the cells square (averaged, not deformed);</li>
+     *   <li>edge-extend leaves the scale and the local origin fixed, so existing lines don't
+     *       move — the frame just reveals or clips more of the same lattice.</li>
+     * </ul>
      */
     private void drawGrid(GraphicsContext g, Sheet s) {
         double cell = GRID_BASE * (s.scaleX() + s.scaleY()) / 2.0;
         if (cell <= 1e-6) {
             return;
         }
-        Vec2 origin = SheetGeometry.localToWorld(s, 0, 0); // TL in world
+        Vec2 origin = SheetGeometry.localToWorld(s, 0, 0); // local origin, fixed under extend
         Vec2 ax = SheetGeometry.axisX(s);
         Vec2 ay = SheetGeometry.axisY(s);
-        double frameW = s.width() * s.scaleX();
-        double frameH = s.height() * s.scaleY();
-        int nx = (int) Math.floor(frameW / cell);
-        int ny = (int) Math.floor(frameH / cell);
-        if (nx > MAX_GRID_LINES || ny > MAX_GRID_LINES) {
+        // Frame extent measured from the local origin, in world units along each axis.
+        double xLo = s.scaleX() * s.left();
+        double xHi = s.scaleX() * s.right();
+        double yLo = s.scaleY() * s.top();
+        double yHi = s.scaleY() * s.bottom();
+        int kMin = (int) Math.ceil(xLo / cell), kMax = (int) Math.floor(xHi / cell);
+        int mMin = (int) Math.ceil(yLo / cell), mMax = (int) Math.floor(yHi / cell);
+        if (kMax - kMin > MAX_GRID_LINES || mMax - mMin > MAX_GRID_LINES) {
             return;
         }
         g.setStroke(GRID_COLOR);
         g.setLineWidth(1);
-        for (int i = 0; i <= nx; i++) {
-            Vec2 base = origin.add(ax.scale(i * cell));
-            line(g, base, base.add(ay.scale(frameH)));
+        for (int k = kMin; k <= kMax; k++) {
+            Vec2 base = origin.add(ax.scale(k * cell));
+            line(g, base.add(ay.scale(yLo)), base.add(ay.scale(yHi)));
         }
-        for (int j = 0; j <= ny; j++) {
-            Vec2 base = origin.add(ay.scale(j * cell));
-            line(g, base, base.add(ax.scale(frameW)));
+        for (int m = mMin; m <= mMax; m++) {
+            Vec2 base = origin.add(ay.scale(m * cell));
+            line(g, base.add(ax.scale(xLo)), base.add(ax.scale(xHi)));
         }
     }
 

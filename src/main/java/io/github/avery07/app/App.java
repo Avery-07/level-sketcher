@@ -48,6 +48,7 @@ public final class App extends Application {
         ToggleButton circle = toolButton("Circle", tools, canvas::useCircleTool);
         ToggleButton polygon = toolButton("Polygon", tools, canvas::usePolygonTool);
         ToggleButton freehand = toolButton("Freehand", tools, canvas::useFreehandTool);
+        ToggleButton erase = toolButton("Erase", tools, canvas::useEraserTool);
         select.setSelected(true);
 
         Button addSheet = new Button("Add Sheet");
@@ -63,7 +64,7 @@ public final class App extends Application {
                 + "Scroll = zoom · middle-drag = pan");
         hint.setPadding(new Insets(0, 0, 0, 8));
 
-        return new ToolBar(select, rectangle, circle, polygon, freehand, new Separator(),
+        return new ToolBar(select, rectangle, circle, polygon, freehand, erase, new Separator(),
                 addSheet, delete, new Separator(), undo, redo, new Separator(), hint);
     }
 

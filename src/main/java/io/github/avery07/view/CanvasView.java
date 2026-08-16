@@ -14,6 +14,7 @@ import io.github.avery07.model.Sheet;
 import io.github.avery07.model.element.Element;
 import io.github.avery07.tool.CanvasContext;
 import io.github.avery07.tool.CircleTool;
+import io.github.avery07.tool.EraserTool;
 import io.github.avery07.tool.FreehandTool;
 import io.github.avery07.tool.KeyInput;
 import io.github.avery07.tool.PointerInput;
@@ -113,6 +114,10 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     public void usePolygonTool() {
         setActiveTool(new PolygonTool());
+    }
+
+    public void useEraserTool() {
+        setActiveTool(new EraserTool());
     }
 
     private void setActiveTool(Tool tool) {
@@ -439,7 +444,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     private void startRename(Sheet s) {
         renaming = s;
-        Vec2 tl = viewport.toScreen(SheetGeometry.localToWorld(s, 0, 0));
+        Vec2 tl = viewport.toScreen(SheetGeometry.localToWorld(s, s.left(), s.top()));
         double width = Math.max(90, labelWidth(s.name()) + 40);
         nameEditor.setText(s.name());
         nameEditor.resizeRelocate(tl.x() + WorkspaceRenderer.LABEL_DX, tl.y() + 2, width, 24);
@@ -474,7 +479,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
     }
 
     private boolean labelHit(Sheet s, double sx, double sy) {
-        Vec2 tl = viewport.toScreen(SheetGeometry.localToWorld(s, 0, 0));
+        Vec2 tl = viewport.toScreen(SheetGeometry.localToWorld(s, s.left(), s.top()));
         double bandWidth = Math.max(labelWidth(s.name()), 60);
         double x0 = tl.x() + 2;
         double x1 = tl.x() + WorkspaceRenderer.LABEL_DX + bandWidth + 6;

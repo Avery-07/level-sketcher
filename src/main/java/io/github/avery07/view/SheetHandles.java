@@ -4,9 +4,9 @@ import io.github.avery07.geometry.Vec2;
 import io.github.avery07.model.Sheet;
 
 /**
- * Screen-space geometry and hit-testing for a selected sheet's transform handles.
- * Handle indices: {@code 0-3} corners (TL, TR, BR, BL), {@code 4-7} edge midpoints
- * (top, right, bottom, left), {@code 8} rotation.
+ * Screen-space geometry and hit-testing for a selected sheet's transform handles, positioned
+ * from the sheet's frame bounds. Handle indices: {@code 0-3} corners (TL, TR, BR, BL),
+ * {@code 4-7} edge midpoints (top, right, bottom, left), {@code 8} rotation.
  */
 public final class SheetHandles {
 
@@ -24,18 +24,19 @@ public final class SheetHandles {
 
     /** Screen positions of all handles for the given sheet, indexed by the constants above. */
     public static Vec2[] screenPositions(Sheet s, Viewport vp) {
-        double w = s.width(), h = s.height();
-        Vec2[] r = new Vec2[COUNT];
-        r[TL] = toScreen(s, 0, 0, vp);
-        r[TR] = toScreen(s, w, 0, vp);
-        r[BR] = toScreen(s, w, h, vp);
-        r[BL] = toScreen(s, 0, h, vp);
-        r[TOP] = toScreen(s, w / 2, 0, vp);
-        r[RIGHT] = toScreen(s, w, h / 2, vp);
-        r[BOTTOM] = toScreen(s, w / 2, h, vp);
-        r[LEFT] = toScreen(s, 0, h / 2, vp);
+        double l = s.left(), t = s.top(), r = s.right(), b = s.bottom();
+        double midX = (l + r) / 2, midY = (t + b) / 2;
+        Vec2[] out = new Vec2[COUNT];
+        out[TL] = toScreen(s, l, t, vp);
+        out[TR] = toScreen(s, r, t, vp);
+        out[BR] = toScreen(s, r, b, vp);
+        out[BL] = toScreen(s, l, b, vp);
+        out[TOP] = toScreen(s, midX, t, vp);
+        out[RIGHT] = toScreen(s, r, midY, vp);
+        out[BOTTOM] = toScreen(s, midX, b, vp);
+        out[LEFT] = toScreen(s, l, midY, vp);
 
-        Vec2 topMid = r[TOP];
+        Vec2 topMid = out[TOP];
         Vec2 centre = vp.toScreen(s.center());
         double ux = topMid.x() - centre.x();
         double uy = topMid.y() - centre.y();
@@ -47,8 +48,8 @@ public final class SheetHandles {
             ux /= len;
             uy /= len;
         }
-        r[ROTATE] = new Vec2(topMid.x() + ux * ROT_OFFSET, topMid.y() + uy * ROT_OFFSET);
-        return r;
+        out[ROTATE] = new Vec2(topMid.x() + ux * ROT_OFFSET, topMid.y() + uy * ROT_OFFSET);
+        return out;
     }
 
     /** Index of the handle within {@link #HIT_RADIUS} of the point, or {@code -1}. */
@@ -64,26 +65,6 @@ public final class SheetHandles {
             }
         }
         return best;
-    }
-
-    /** Local coordinates of a corner handle. */
-    public static double[] cornerLocal(int corner, double w, double h) {
-        return switch (corner) {
-            case TL -> new double[]{0, 0};
-            case TR -> new double[]{w, 0};
-            case BR -> new double[]{w, h};
-            default -> new double[]{0, h}; // BL
-        };
-    }
-
-    /** Local coordinates of the edge midpoint opposite the given edge handle. */
-    public static double[] oppositeEdgeMid(int edge, double w, double h) {
-        return switch (edge) {
-            case TOP -> new double[]{w / 2, h};
-            case BOTTOM -> new double[]{w / 2, 0};
-            case RIGHT -> new double[]{0, h / 2};
-            default -> new double[]{w, h / 2}; // LEFT
-        };
     }
 
     private static Vec2 toScreen(Sheet s, double lx, double ly, Viewport vp) {

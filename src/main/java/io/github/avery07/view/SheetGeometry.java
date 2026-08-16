@@ -22,7 +22,7 @@ public final class SheetGeometry {
         a.appendTranslation(s.center().x(), s.center().y());
         a.appendRotation(Math.toDegrees(s.rotation()));
         a.appendScale(s.scaleX(), s.scaleY());
-        a.appendTranslation(-s.width() / 2, -s.height() / 2);
+        a.appendTranslation(-s.frameCenterX(), -s.frameCenterY());
         return a;
     }
 
@@ -43,8 +43,8 @@ public final class SheetGeometry {
     public static boolean contains(Sheet s, Vec2 world) {
         Vec2 l = worldToLocal(s, world);
         return l != null
-                && l.x() >= 0 && l.x() <= s.width()
-                && l.y() >= 0 && l.y() <= s.height();
+                && l.x() >= s.left() && l.x() <= s.right()
+                && l.y() >= s.top() && l.y() <= s.bottom();
     }
 
     /** Unit vector along the sheet's local +x axis, in world space (rotation only). */

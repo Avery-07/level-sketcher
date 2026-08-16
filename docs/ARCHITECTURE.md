@@ -47,7 +47,7 @@ io.github.avery07
 │   │           SheetGeometry, SheetHandles, SheetManipulator (transform math)
 │   └── render/  WorkspaceRenderer (background, sheets, grid, selection + handles)
 ├── tool/       Tool + CanvasContext (decoupling boundary), PointerInput/KeyInput,
-│   │           Rectangle/Circle/Freehand tools (drawing gestures)
+│   │           Rectangle/Circle/Polygon/Freehand/Eraser tools (gestures)
 ├── ui/         Toolbar, Inspector, LayerPanel, SymbolLibraryPanel, MenuBar
 └── io/         Jackson serialization, save/load, image + JSON/SVG export
 ```
