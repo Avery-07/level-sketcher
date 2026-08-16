@@ -33,7 +33,7 @@ coordinates; sheets are positioned in world space.
 ## Package structure
 
 ```
-io.github.mayeuldegans.levelsketcher
+io.github.avery07
 ├── app/        Application entry point, main window, wiring
 ├── model/      Pure domain (NO JavaFX imports)
 │   ├── Project, Workspace(canvas), Sheet, Layer, Group
