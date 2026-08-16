@@ -46,7 +46,8 @@ io.github.avery07
 ├── view/       CanvasView (input routing + inline rename editor), Viewport,
 │   │           SheetGeometry, SheetHandles, SheetManipulator (transform math)
 │   └── render/  WorkspaceRenderer (background, sheets, grid, selection + handles)
-├── tool/       Tool interface, ToolManager, one class per tool
+├── tool/       Tool + CanvasContext (decoupling boundary), PointerInput/KeyInput,
+│   │           Rectangle/Circle/Freehand tools (drawing gestures)
 ├── ui/         Toolbar, Inspector, LayerPanel, SymbolLibraryPanel, MenuBar
 └── io/         Jackson serialization, save/load, image + JSON/SVG export
 ```

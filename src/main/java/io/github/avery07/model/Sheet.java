@@ -1,6 +1,10 @@
 package io.github.avery07.model;
 
 import io.github.avery07.geometry.Vec2;
+import io.github.avery07.model.element.Element;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A bounded, movable, resizable surface placed on the workspace — the only drawable surface
@@ -26,6 +30,7 @@ public final class Sheet {
     private double scaleY;
     private double width;     // local units
     private double height;    // local units
+    private final List<Element> elements = new ArrayList<>();
 
     public Sheet(String name, Vec2 center, double width, double height) {
         this.name = name;
@@ -91,6 +96,23 @@ public final class Sheet {
 
     public void setHeight(double height) {
         this.height = height;
+    }
+
+    /** Live, mutable list of elements in z-order (last = topmost). */
+    public List<Element> elements() {
+        return elements;
+    }
+
+    public void addElement(Element element) {
+        elements.add(element);
+    }
+
+    public void addElement(int index, Element element) {
+        elements.add(index, element);
+    }
+
+    public void removeElement(Element element) {
+        elements.remove(element);
     }
 
     /** Immutable snapshot of the geometry, used for undo/redo of transforms. */

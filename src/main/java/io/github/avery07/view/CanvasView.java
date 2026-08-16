@@ -1,12 +1,24 @@
 package io.github.avery07.view;
 
+import io.github.avery07.command.AddElementCommand;
 import io.github.avery07.command.AddSheetCommand;
+import io.github.avery07.command.Command;
+import io.github.avery07.command.MoveElementCommand;
+import io.github.avery07.command.RemoveElementCommand;
 import io.github.avery07.command.RemoveSheetCommand;
 import io.github.avery07.command.RenameSheetCommand;
 import io.github.avery07.command.SetSheetStateCommand;
 import io.github.avery07.document.Document;
 import io.github.avery07.geometry.Vec2;
 import io.github.avery07.model.Sheet;
+import io.github.avery07.model.element.Element;
+import io.github.avery07.tool.CanvasContext;
+import io.github.avery07.tool.CircleTool;
+import io.github.avery07.tool.FreehandTool;
+import io.github.avery07.tool.KeyInput;
+import io.github.avery07.tool.PointerInput;
+import io.github.avery07.tool.RectangleTool;
+import io.github.avery07.tool.Tool;
 import io.github.avery07.view.render.WorkspaceRenderer;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.control.TextField;
@@ -20,17 +32,21 @@ import javafx.scene.text.Text;
 
 /**
  * The interactive canvas node: a pannable/zoomable view of the workspace (spec §6.4, §7.1).
- * It owns the two stacked canvases and the inline rename editor, routes input, and delegates
- * the heavy lifting — drawing to {@link WorkspaceRenderer}, transforms to
- * {@link SheetManipulator}, handle geometry to {@link SheetHandles}.
+ * It owns the two stacked canvases and the inline rename editor, routes input, and serves as
+ * the {@link CanvasContext} for drawing tools.
  *
- * <p>Pointer model: scroll = zoom; middle-drag or empty-space drag = pan; on a selected sheet
- * a handle drag resizes (corner) / extends (edge) / rotates (stalk), a body drag moves;
- * double-click on the name renames.
+ * <p>When a drawing {@link Tool} is active, pointer input is forwarded to it. Otherwise the
+ * view is in <em>select mode</em>: click an element to select/move it, click a sheet to
+ * select/move/resize it, click empty space to pan; double-click a sheet name to rename.
  */
-public final class CanvasView extends StackPane {
+public final class CanvasView extends StackPane implements CanvasContext {
 
-    private enum Mode { NONE, PAN, SHEET }
+    private static final double ELEMENT_HIT_PIXELS = 6;
+
+    private enum Mode { NONE, PAN, SHEET, ELEMENT }
+
+    private record ElementHit(Sheet sheet, Element element) {
+    }
 
     private final Document document;
     private final Viewport viewport = new Viewport();
@@ -42,9 +58,16 @@ public final class CanvasView extends StackPane {
     private final TextField nameEditor = new TextField();
     private final Text measurer = new Text();
 
+    private Tool activeTool; // null = select mode
     private Mode mode = Mode.NONE;
     private double lastPanX, lastPanY;
     private Sheet renaming;
+
+    // Element-move state (select mode).
+    private Sheet movingSheet;
+    private Element movingElement;
+    private Vec2 lastMoveLocal;
+    private double moveDx, moveDy;
 
     public CanvasView(Document document) {
         this.document = document;
@@ -68,25 +91,58 @@ public final class CanvasView extends StackPane {
         document.addChangeListener(this::requestRender);
     }
 
-    // ----- public actions (wired to the toolbar) -----
+    // ----- tool selection (wired to the toolbar) -----
+
+    public void useSelectTool() {
+        setActiveTool(null);
+    }
+
+    public void useRectangleTool() {
+        setActiveTool(new RectangleTool());
+    }
+
+    public void useCircleTool() {
+        setActiveTool(new CircleTool());
+    }
+
+    public void useFreehandTool() {
+        setActiveTool(new FreehandTool());
+    }
+
+    private void setActiveTool(Tool tool) {
+        if (activeTool != null) {
+            activeTool.cancel(this);
+        }
+        activeTool = tool;
+        requestFocus();
+        requestRender();
+    }
+
+    // ----- other public actions -----
 
     public void addSheetAtCenter() {
         Vec2 worldCenter = viewport.toWorld(new Vec2(getWidth() / 2, getHeight() / 2));
         Sheet sheet = new Sheet(nextSheetName(), worldCenter, 400, 300);
-        document.undoManager().execute(new AddSheetCommand(document.workspace(), sheet));
-        document.setSelectedSheet(sheet);
-        document.markDirty();
+        execute(new AddSheetCommand(document.workspace(), sheet));
+        document.selectSheet(sheet);
         requestFocus();
     }
 
     public void deleteSelected() {
-        Sheet s = document.selectedSheet();
-        if (s == null) {
+        Element el = document.selectedElement();
+        if (el != null) {
+            Sheet owner = document.selectedSheet();
+            if (owner != null) {
+                execute(new RemoveElementCommand(owner, el));
+                document.clearSelection();
+            }
             return;
         }
-        document.undoManager().execute(new RemoveSheetCommand(document.workspace(), s));
-        document.setSelectedSheet(null);
-        document.markDirty();
+        Sheet s = document.selectedSheet();
+        if (s != null) {
+            execute(new RemoveSheetCommand(document.workspace(), s));
+            document.clearSelection();
+        }
     }
 
     public void undo() {
@@ -101,9 +157,56 @@ public final class CanvasView extends StackPane {
         document.notifyChanged();
     }
 
+    // ----- CanvasContext -----
+
+    @Override
+    public Document document() {
+        return document;
+    }
+
+    @Override
+    public Vec2 worldOf(double screenX, double screenY) {
+        return viewport.toWorld(new Vec2(screenX, screenY));
+    }
+
+    @Override
+    public Vec2 screenOf(Vec2 world) {
+        return viewport.toScreen(world);
+    }
+
+    @Override
+    public Vec2 worldToLocal(Sheet sheet, Vec2 world) {
+        return SheetGeometry.worldToLocal(sheet, world);
+    }
+
+    @Override
+    public Vec2 localToWorld(Sheet sheet, double localX, double localY) {
+        return SheetGeometry.localToWorld(sheet, localX, localY);
+    }
+
+    @Override
+    public Sheet topmostSheetAt(Vec2 world) {
+        return topmostAt(world);
+    }
+
+    @Override
+    public double worldPerPixel() {
+        return 1.0 / viewport.zoom();
+    }
+
+    @Override
+    public void execute(Command command) {
+        document.undoManager().execute(command);
+        document.markDirty();
+    }
+
+    @Override
     public void requestRender() {
         renderer.renderContent(content.getGraphicsContext2D(), content.getWidth(), content.getHeight());
         renderer.renderOverlay(overlay.getGraphicsContext2D(), overlay.getWidth(), overlay.getHeight());
+        if (activeTool != null) {
+            activeTool.paintOverlay(overlay.getGraphicsContext2D(), this);
+        }
     }
 
     // ----- input -----
@@ -117,65 +220,98 @@ public final class CanvasView extends StackPane {
             beginPan(sx, sy);
             return;
         }
+        if (activeTool != null) {
+            activeTool.onPress(this, pointer(e));
+            requestRender();
+            return;
+        }
         if (e.getButton() != MouseButton.PRIMARY) {
             return;
         }
-        Vec2 world = viewport.toWorld(new Vec2(sx, sy));
+
+        Vec2 world = worldOf(sx, sy);
 
         if (e.getClickCount() == 2) {
             Sheet hit = topmostAt(world);
             if (hit != null && labelHit(hit, sx, sy)) {
-                document.setSelectedSheet(hit);
+                document.selectSheet(hit);
                 startRename(hit);
                 return;
             }
         }
 
-        Sheet sel = document.selectedSheet();
-        int handle = (sel != null) ? SheetHandles.hit(sel, viewport, sx, sy) : -1;
-        if (handle >= 0) {
-            manipulator.beginTransform(sel, handle, world);
+        Sheet selSheet = document.selectedSheet();
+        if (selSheet != null && document.selectedElement() == null) {
+            int handle = SheetHandles.hit(selSheet, viewport, sx, sy);
+            if (handle >= 0) {
+                manipulator.beginTransform(selSheet, handle, world);
+                mode = Mode.SHEET;
+                return;
+            }
+        }
+
+        ElementHit eh = topmostElementAt(world);
+        if (eh != null) {
+            document.selectElement(eh.sheet(), eh.element());
+            beginElementMove(eh.sheet(), eh.element(), world);
+            return;
+        }
+
+        Sheet hs = topmostAt(world);
+        if (hs != null) {
+            document.selectSheet(hs);
+            manipulator.beginMove(hs, world);
             mode = Mode.SHEET;
             return;
         }
 
-        Sheet hit = topmostAt(world);
-        if (hit != null) {
-            document.setSelectedSheet(hit);
-            manipulator.beginMove(hit, world);
-            mode = Mode.SHEET;
-        } else {
-            document.setSelectedSheet(null);
-            beginPan(sx, sy);
-        }
+        document.clearSelection();
+        beginPan(sx, sy);
     }
 
     private void onDrag(MouseEvent e) {
-        switch (mode) {
-            case PAN -> {
-                viewport.panBy(e.getX() - lastPanX, e.getY() - lastPanY);
-                lastPanX = e.getX();
-                lastPanY = e.getY();
-                requestRender();
-            }
-            case SHEET -> {
-                manipulator.update(viewport.toWorld(new Vec2(e.getX(), e.getY())), e.isShiftDown());
-                requestRender();
-            }
-            default -> { }
+        if (mode == Mode.PAN) {
+            viewport.panBy(e.getX() - lastPanX, e.getY() - lastPanY);
+            lastPanX = e.getX();
+            lastPanY = e.getY();
+            requestRender();
+            return;
+        }
+        if (activeTool != null) {
+            activeTool.onDrag(this, pointer(e));
+            requestRender();
+            return;
+        }
+        Vec2 world = worldOf(e.getX(), e.getY());
+        if (mode == Mode.SHEET) {
+            manipulator.update(world, e.isShiftDown());
+            requestRender();
+        } else if (mode == Mode.ELEMENT) {
+            elementMoveDrag(world);
+            requestRender();
         }
     }
 
     private void onRelease(MouseEvent e) {
+        if (mode == Mode.PAN) {
+            mode = Mode.NONE;
+            return;
+        }
+        if (activeTool != null) {
+            activeTool.onRelease(this, pointer(e));
+            requestRender();
+            return;
+        }
         if (mode == Mode.SHEET && manipulator.active()) {
             Sheet s = manipulator.sheet();
             Sheet.State before = manipulator.startState();
             Sheet.State after = s.capture();
             if (!after.equals(before)) {
-                document.undoManager().execute(new SetSheetStateCommand(s, before, after));
-                document.markDirty();
+                execute(new SetSheetStateCommand(s, before, after));
             }
             manipulator.end();
+        } else if (mode == Mode.ELEMENT && movingElement != null) {
+            commitElementMove();
         }
         mode = Mode.NONE;
     }
@@ -190,23 +326,81 @@ public final class CanvasView extends StackPane {
         if (renaming != null) {
             return;
         }
-        if (e.getCode() == KeyCode.DELETE || e.getCode() == KeyCode.BACK_SPACE) {
+        KeyCode c = e.getCode();
+        if (c == KeyCode.ESCAPE && activeTool != null) {
+            activeTool.cancel(this);
+            requestRender();
+            return;
+        }
+        if (c == KeyCode.DELETE || c == KeyCode.BACK_SPACE) {
             deleteSelected();
-        } else if (e.isShortcutDown() && e.getCode() == KeyCode.Z) {
+            return;
+        }
+        if (e.isShortcutDown() && c == KeyCode.Z) {
             if (e.isShiftDown()) {
                 redo();
             } else {
                 undo();
             }
-        } else if (e.isShortcutDown() && e.getCode() == KeyCode.Y) {
-            redo();
+            return;
         }
+        if (e.isShortcutDown() && c == KeyCode.Y) {
+            redo();
+            return;
+        }
+        if (activeTool != null) {
+            activeTool.onKey(this, new KeyInput(c, e.isShiftDown()));
+            requestRender();
+        }
+    }
+
+    private PointerInput pointer(MouseEvent e) {
+        return new PointerInput(e.getX(), e.getY(),
+                e.getButton() == MouseButton.PRIMARY || e.isPrimaryButtonDown(),
+                e.getButton() == MouseButton.MIDDLE, e.isShiftDown(), e.getClickCount());
     }
 
     private void beginPan(double sx, double sy) {
         mode = Mode.PAN;
         lastPanX = sx;
         lastPanY = sy;
+    }
+
+    // ----- element move (select mode) -----
+
+    private void beginElementMove(Sheet s, Element e, Vec2 world) {
+        if (e.isLocked()) {
+            mode = Mode.NONE;
+            return;
+        }
+        movingSheet = s;
+        movingElement = e;
+        lastMoveLocal = SheetGeometry.worldToLocal(s, world);
+        moveDx = 0;
+        moveDy = 0;
+        mode = Mode.ELEMENT;
+    }
+
+    private void elementMoveDrag(Vec2 world) {
+        Vec2 cur = SheetGeometry.worldToLocal(movingSheet, world);
+        if (cur == null || lastMoveLocal == null) {
+            return;
+        }
+        double dx = cur.x() - lastMoveLocal.x();
+        double dy = cur.y() - lastMoveLocal.y();
+        movingElement.translate(dx, dy);
+        moveDx += dx;
+        moveDy += dy;
+        lastMoveLocal = cur;
+    }
+
+    private void commitElementMove() {
+        if (moveDx != 0 || moveDy != 0) {
+            movingElement.translate(-moveDx, -moveDy); // reset, then apply once as a command
+            execute(new MoveElementCommand(movingElement, moveDx, moveDy));
+        }
+        movingElement = null;
+        movingSheet = null;
     }
 
     // ----- rename editor -----
@@ -250,8 +444,7 @@ public final class CanvasView extends StackPane {
         nameEditor.setVisible(false);
         String text = nameEditor.getText().trim();
         if (!text.isEmpty() && !text.equals(s.name())) {
-            document.undoManager().execute(new RenameSheetCommand(s, s.name(), text));
-            document.markDirty();
+            execute(new RenameSheetCommand(s, s.name(), text));
         } else {
             document.notifyChanged();
         }
@@ -294,6 +487,30 @@ public final class CanvasView extends StackPane {
         return null;
     }
 
+    private ElementHit topmostElementAt(Vec2 world) {
+        var sheets = document.workspace().sheets();
+        for (int i = sheets.size() - 1; i >= 0; i--) {
+            Sheet s = sheets.get(i);
+            Vec2 local = SheetGeometry.worldToLocal(s, world);
+            if (local == null) {
+                continue;
+            }
+            double tol = elementToleranceLocal(s);
+            var elements = s.elements();
+            for (int j = elements.size() - 1; j >= 0; j--) {
+                if (elements.get(j).hitTest(local, tol)) {
+                    return new ElementHit(s, elements.get(j));
+                }
+            }
+        }
+        return null;
+    }
+
+    private double elementToleranceLocal(Sheet s) {
+        double avgScale = Math.max(1e-6, (Math.abs(s.scaleX()) + Math.abs(s.scaleY())) / 2);
+        return (ELEMENT_HIT_PIXELS / viewport.zoom()) / avgScale;
+    }
+
     private String nextSheetName() {
         int n = 1;
         while (nameExists("Sheet " + n)) {
@@ -314,7 +531,12 @@ public final class CanvasView extends StackPane {
     private void clearSelectionIfGone() {
         Sheet s = document.selectedSheet();
         if (s != null && !document.workspace().sheets().contains(s)) {
-            document.setSelectedSheet(null);
+            document.clearSelection();
+            return;
+        }
+        Element e = document.selectedElement();
+        if (e != null && s != null && !s.elements().contains(e)) {
+            document.clearSelection();
         }
     }
 

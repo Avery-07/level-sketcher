@@ -3,12 +3,20 @@ package io.github.avery07.view.render;
 import io.github.avery07.document.Document;
 import io.github.avery07.geometry.Vec2;
 import io.github.avery07.model.Sheet;
+import io.github.avery07.model.Style;
+import io.github.avery07.model.element.Circle;
+import io.github.avery07.model.element.EditablePolygon;
+import io.github.avery07.model.element.Element;
+import io.github.avery07.model.element.FreehandStroke;
 import io.github.avery07.view.SheetGeometry;
 import io.github.avery07.view.SheetHandles;
 import io.github.avery07.view.Viewport;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Draws the workspace: the background and sheets (fill, grid, label, border) on the content
@@ -25,6 +33,7 @@ public final class WorkspaceRenderer {
 
     private static final double GRID_WORLD = 40;   // grid spacing in world units
     private static final int MAX_GRID_LINES = 400; // per axis, perf guard
+    private static final int CIRCLE_SEGMENTS = 64; // polygon approximation for circles
 
     private static final Color BG = Color.web("#2b2b2b");
     private static final Color SHEET_FILL = Color.web("#fafafa");
@@ -56,6 +65,11 @@ public final class WorkspaceRenderer {
         g.clearRect(0, 0, w, h);
         Sheet s = document.selectedSheet();
         if (s == null) {
+            return;
+        }
+        Element el = document.selectedElement();
+        if (el != null) {
+            drawElementHighlight(g, s, el);
             return;
         }
         Vec2[] r = SheetHandles.screenPositions(s, viewport);
@@ -94,6 +108,10 @@ public final class WorkspaceRenderer {
 
         drawGrid(g, s);
 
+        for (Element e : s.elements()) {
+            drawElement(g, s, e);
+        }
+
         // Label in screen space at a fixed size, so it never distorts with the sheet.
         g.setFill(LABEL_COLOR);
         g.setFont(LABEL_FONT);
@@ -130,6 +148,96 @@ public final class WorkspaceRenderer {
             Vec2 base = origin.add(ay.scale(j * GRID_WORLD));
             line(g, base, base.add(ax.scale(frameW)));
         }
+    }
+
+    // ----- elements -----
+
+    private void drawElement(GraphicsContext g, Sheet s, Element e) {
+        switch (e) {
+            case EditablePolygon p -> fillAndStroke(g, s, p.vertices(), p.style());
+            case Circle c -> fillAndStroke(g, s, circlePoints(c), c.style());
+            case FreehandStroke f -> strokeOpen(g, s, f.points(), f.style());
+        }
+    }
+
+    private void drawElementHighlight(GraphicsContext g, Sheet s, Element e) {
+        g.setStroke(SELECTION);
+        g.setLineWidth(2.5);
+        switch (e) {
+            case EditablePolygon p -> strokeClosedScreen(g, s, p.vertices());
+            case Circle c -> strokeClosedScreen(g, s, circlePoints(c));
+            case FreehandStroke f -> strokeOpenScreen(g, s, f.points());
+        }
+    }
+
+    private void fillAndStroke(GraphicsContext g, Sheet s, List<Vec2> local, Style style) {
+        int n = local.size();
+        if (n < 2) {
+            return;
+        }
+        double[] xs = new double[n];
+        double[] ys = new double[n];
+        toScreenArrays(s, local, xs, ys);
+        if (style.fill() != null) {
+            g.setFill(Color.web(style.fill()));
+            g.fillPolygon(xs, ys, n);
+        }
+        g.setStroke(Color.web(style.stroke()));
+        g.setLineWidth(style.strokeWidth());
+        g.strokePolygon(xs, ys, n);
+    }
+
+    private void strokeOpen(GraphicsContext g, Sheet s, List<Vec2> local, Style style) {
+        int n = local.size();
+        if (n < 2) {
+            return;
+        }
+        double[] xs = new double[n];
+        double[] ys = new double[n];
+        toScreenArrays(s, local, xs, ys);
+        g.setStroke(Color.web(style.stroke()));
+        g.setLineWidth(style.strokeWidth());
+        g.strokePolyline(xs, ys, n);
+    }
+
+    private void strokeClosedScreen(GraphicsContext g, Sheet s, List<Vec2> local) {
+        int n = local.size();
+        if (n < 2) {
+            return;
+        }
+        double[] xs = new double[n];
+        double[] ys = new double[n];
+        toScreenArrays(s, local, xs, ys);
+        g.strokePolygon(xs, ys, n);
+    }
+
+    private void strokeOpenScreen(GraphicsContext g, Sheet s, List<Vec2> local) {
+        int n = local.size();
+        if (n < 2) {
+            return;
+        }
+        double[] xs = new double[n];
+        double[] ys = new double[n];
+        toScreenArrays(s, local, xs, ys);
+        g.strokePolyline(xs, ys, n);
+    }
+
+    private void toScreenArrays(Sheet s, List<Vec2> local, double[] xs, double[] ys) {
+        for (int i = 0; i < local.size(); i++) {
+            Vec2 sc = screen(s, local.get(i).x(), local.get(i).y());
+            xs[i] = sc.x();
+            ys[i] = sc.y();
+        }
+    }
+
+    private List<Vec2> circlePoints(Circle c) {
+        List<Vec2> pts = new ArrayList<>(CIRCLE_SEGMENTS);
+        for (int i = 0; i < CIRCLE_SEGMENTS; i++) {
+            double a = 2 * Math.PI * i / CIRCLE_SEGMENTS;
+            pts.add(new Vec2(c.center().x() + c.radius() * Math.cos(a),
+                    c.center().y() + c.radius() * Math.sin(a)));
+        }
+        return pts;
     }
 
     private void line(GraphicsContext g, Vec2 aWorld, Vec2 bWorld) {

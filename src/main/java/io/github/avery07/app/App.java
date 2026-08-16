@@ -8,6 +8,8 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.ToolBar;
 import javafx.scene.layout.BorderPane;
 import javafx.stage.Stage;
@@ -40,25 +42,41 @@ public final class App extends Application {
     }
 
     private ToolBar buildToolBar(CanvasView canvas) {
+        ToggleGroup tools = new ToggleGroup();
+        ToggleButton select = toolButton("Select", tools, canvas::useSelectTool);
+        ToggleButton rectangle = toolButton("Rectangle", tools, canvas::useRectangleTool);
+        ToggleButton circle = toolButton("Circle", tools, canvas::useCircleTool);
+        ToggleButton freehand = toolButton("Freehand", tools, canvas::useFreehandTool);
+        select.setSelected(true);
+
         Button addSheet = new Button("Add Sheet");
         addSheet.setOnAction(e -> canvas.addSheetAtCenter());
-
         Button delete = new Button("Delete");
         delete.setOnAction(e -> canvas.deleteSelected());
-
         Button undo = new Button("Undo");
         undo.setOnAction(e -> canvas.undo());
-
         Button redo = new Button("Redo");
         redo.setOnAction(e -> canvas.redo());
 
-        Label hint = new Label(
-                "Scroll = zoom · drag empty space or middle-drag = pan · "
-                + "corners scale · edges extend · top handle rotates");
+        Label hint = new Label("Scroll = zoom · middle/empty-drag = pan");
         hint.setPadding(new Insets(0, 0, 0, 8));
 
-        return new ToolBar(addSheet, delete, new Separator(), undo, redo,
-                new Separator(), hint);
+        return new ToolBar(select, rectangle, circle, freehand, new Separator(),
+                addSheet, delete, new Separator(), undo, redo, new Separator(), hint);
+    }
+
+    private ToggleButton toolButton(String text, ToggleGroup group, Runnable onSelect) {
+        ToggleButton button = new ToggleButton(text);
+        button.setToggleGroup(group);
+        button.setOnAction(e -> {
+            if (button.isSelected()) {
+                onSelect.run();
+            } else {
+                // Prevent deselecting the active tool by clicking it again.
+                button.setSelected(true);
+            }
+        });
+        return button;
     }
 
     /** Window title with the unsaved-changes indicator (spec §7.9). */
