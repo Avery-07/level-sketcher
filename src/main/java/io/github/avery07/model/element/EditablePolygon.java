@@ -37,6 +37,12 @@ public final class EditablePolygon implements Element {
         return vertices;
     }
 
+    /** Replace all vertices (used by undo/redo of vertex edits). */
+    public void setVertices(List<Vec2> newVertices) {
+        vertices.clear();
+        vertices.addAll(newVertices);
+    }
+
     @Override
     public Style style() {
         return style;

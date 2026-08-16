@@ -44,7 +44,8 @@ io.github.avery07
 ├── command/    Command, UndoManager, concrete edit commands
 ├── geometry/   Vec2, Transform helpers, hit-testing, bounds
 ├── view/       CanvasView (input routing + inline rename editor), Viewport,
-│   │           SheetGeometry, SheetHandles, SheetManipulator (transform math)
+│   │           SheetGeometry, SheetHandles, SheetManipulator (sheet transforms),
+│   │           ElementHandles, ElementEditor (vertex/edge/radius editing)
 │   └── render/  WorkspaceRenderer (background, sheets, grid, selection + handles)
 ├── tool/       Tool + CanvasContext (decoupling boundary), PointerInput/KeyInput,
 │   │           Rectangle/Circle/Polygon/Freehand/Eraser tools (gestures)

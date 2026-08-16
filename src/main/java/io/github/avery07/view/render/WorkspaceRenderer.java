@@ -8,6 +8,7 @@ import io.github.avery07.model.element.Circle;
 import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.Element;
 import io.github.avery07.model.element.FreehandStroke;
+import io.github.avery07.view.ElementHandles;
 import io.github.avery07.view.SheetGeometry;
 import io.github.avery07.view.SheetHandles;
 import io.github.avery07.view.Viewport;
@@ -70,6 +71,7 @@ public final class WorkspaceRenderer {
         Element el = document.selectedElement();
         if (el != null) {
             drawElementHighlight(g, s, el);
+            drawElementHandles(g, s, el);
             return;
         }
         Vec2[] r = SheetHandles.screenPositions(s, viewport);
@@ -177,6 +179,27 @@ public final class WorkspaceRenderer {
             case EditablePolygon p -> strokeClosedScreen(g, s, p.vertices());
             case Circle c -> strokeClosedScreen(g, s, circlePoints(c));
             case FreehandStroke f -> strokeOpenScreen(g, s, f.points());
+        }
+    }
+
+    private void drawElementHandles(GraphicsContext g, Sheet s, Element e) {
+        for (ElementHandles.Handle h : ElementHandles.handles(e, s, viewport)) {
+            Vec2 p = h.screen();
+            double sz = ElementHandles.SIZE;
+            switch (h.kind()) {
+                case VERTEX, RADIUS -> {
+                    g.setFill(HANDLE_FILL);
+                    g.setStroke(SELECTION);
+                    g.setLineWidth(1.5);
+                    g.fillRect(p.x() - sz / 2, p.y() - sz / 2, sz, sz);
+                    g.strokeRect(p.x() - sz / 2, p.y() - sz / 2, sz, sz);
+                }
+                case EDGE -> {
+                    g.setFill(SELECTION);
+                    double d = sz - 2;
+                    g.fillOval(p.x() - d / 2, p.y() - d / 2, d, d);
+                }
+            }
         }
     }
 

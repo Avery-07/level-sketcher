@@ -7,10 +7,13 @@ import io.github.avery07.command.MoveElementCommand;
 import io.github.avery07.command.RemoveElementCommand;
 import io.github.avery07.command.RemoveSheetCommand;
 import io.github.avery07.command.RenameSheetCommand;
+import io.github.avery07.command.SetPolygonVerticesCommand;
 import io.github.avery07.command.SetSheetStateCommand;
 import io.github.avery07.document.Document;
+import io.github.avery07.geometry.Hit;
 import io.github.avery07.geometry.Vec2;
 import io.github.avery07.model.Sheet;
+import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.Element;
 import io.github.avery07.tool.CanvasContext;
 import io.github.avery07.tool.CircleTool;
@@ -32,6 +35,9 @@ import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.StackPane;
 import javafx.scene.text.Text;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * The interactive canvas node: a pannable/zoomable view of the workspace (spec §6.4, §7.1).
  * It owns the two stacked canvases and the inline rename editor, routes input, and serves as
@@ -45,12 +51,13 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     private static final double ELEMENT_HIT_PIXELS = 6;
 
-    private enum Mode { NONE, PAN, SHEET, ELEMENT }
+    private enum Mode { NONE, PAN, SHEET, ELEMENT, ELEMENT_EDIT }
 
     private final Document document;
     private final Viewport viewport = new Viewport();
     private final WorkspaceRenderer renderer;
     private final SheetManipulator manipulator = new SheetManipulator();
+    private final ElementEditor elementEditor = new ElementEditor();
 
     private final Canvas content = new Canvas();
     private final Canvas overlay = new Canvas();
@@ -246,6 +253,12 @@ public final class CanvasView extends StackPane implements CanvasContext {
                 startRename(hit);
                 return;
             }
+            // Double-click an edge of the selected polygon to subdivide it.
+            if (document.selectedElement() instanceof EditablePolygon poly
+                    && document.selectedSheet() != null
+                    && subdivideEdge(poly, document.selectedSheet(), world)) {
+                return;
+            }
         }
 
         Sheet selSheet = document.selectedSheet();
@@ -254,6 +267,17 @@ public final class CanvasView extends StackPane implements CanvasContext {
             if (handle >= 0) {
                 manipulator.beginTransform(selSheet, handle, world);
                 mode = Mode.SHEET;
+                return;
+            }
+        }
+
+        // Edit handles of the selected element (vertex / edge / radius) take priority.
+        Element selEl = document.selectedElement();
+        if (selEl != null && selSheet != null) {
+            ElementHandles.Hit h = ElementHandles.hitTest(selEl, selSheet, viewport, sx, sy);
+            if (h != null) {
+                elementEditor.begin(selEl, selSheet, h, SheetGeometry.worldToLocal(selSheet, world));
+                mode = Mode.ELEMENT_EDIT;
                 return;
             }
         }
@@ -298,6 +322,9 @@ public final class CanvasView extends StackPane implements CanvasContext {
         } else if (mode == Mode.ELEMENT) {
             elementMoveDrag(world);
             requestRender();
+        } else if (mode == Mode.ELEMENT_EDIT && elementEditor.active()) {
+            elementEditor.update(SheetGeometry.worldToLocal(elementEditor.sheet(), world));
+            requestRender();
         }
     }
 
@@ -321,6 +348,12 @@ public final class CanvasView extends StackPane implements CanvasContext {
             manipulator.end();
         } else if (mode == Mode.ELEMENT && movingElement != null) {
             commitElementMove();
+        } else if (mode == Mode.ELEMENT_EDIT && elementEditor.active()) {
+            Command c = elementEditor.buildCommand();
+            if (c != null) {
+                execute(c);
+            }
+            elementEditor.end();
         }
         mode = Mode.NONE;
     }
@@ -501,6 +534,34 @@ public final class CanvasView extends StackPane implements CanvasContext {
             }
         }
         return null;
+    }
+
+    /** Insert a vertex where an edge of the polygon was clicked; returns false if no edge is near. */
+    private boolean subdivideEdge(EditablePolygon p, Sheet s, Vec2 world) {
+        Vec2 local = SheetGeometry.worldToLocal(s, world);
+        if (local == null) {
+            return false;
+        }
+        List<Vec2> vs = p.vertices();
+        int n = vs.size();
+        double tol = elementToleranceLocal(s);
+        int bestEdge = -1;
+        double bestDist = tol;
+        for (int i = 0; i < n; i++) {
+            double d = Hit.distanceToSegment(local, vs.get(i), vs.get((i + 1) % n));
+            if (d <= bestDist) {
+                bestDist = d;
+                bestEdge = i;
+            }
+        }
+        if (bestEdge < 0) {
+            return false;
+        }
+        List<Vec2> before = new ArrayList<>(vs);
+        List<Vec2> after = new ArrayList<>(vs);
+        after.add(bestEdge + 1, local);
+        execute(new SetPolygonVerticesCommand(p, before, after));
+        return true;
     }
 
     /** Topmost element of a single sheet under a world point, or {@code null}. */
