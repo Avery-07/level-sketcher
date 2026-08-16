@@ -16,7 +16,6 @@ import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
-import javafx.scene.transform.Affine;
 
 /**
  * The interactive canvas: a pannable/zoomable view of the workspace (spec §6.4, §7.1) with a
@@ -52,6 +51,7 @@ public final class CanvasView extends StackPane {
     private static final Color BORDER = Color.web("#888888");
     private static final Color SEL = Color.web("#3b82f6");
     private static final Color HANDLE_FILL = Color.WHITE;
+    private static final Font LABEL_FONT = Font.font(13);
 
     private enum Mode { NONE, PAN, MOVE, RESIZE, EXTEND, ROTATE }
 
@@ -59,8 +59,6 @@ public final class CanvasView extends StackPane {
     private final Viewport viewport = new Viewport();
     private final Canvas content = new Canvas();
     private final Canvas overlay = new Canvas();
-
-    private int sheetCounter = 0;
 
     // Interaction state.
     private Mode mode = Mode.NONE;
@@ -99,11 +97,29 @@ public final class CanvasView extends StackPane {
 
     public void addSheetAtCenter() {
         Vec2 worldCenter = viewport.toWorld(new Vec2(getWidth() / 2, getHeight() / 2));
-        Sheet sheet = new Sheet("Sheet " + (++sheetCounter), worldCenter, 400, 300);
+        Sheet sheet = new Sheet(nextSheetName(), worldCenter, 400, 300);
         document.undoManager().execute(new AddSheetCommand(document.workspace(), sheet));
         document.setSelectedSheet(sheet);
         document.markDirty();
         requestFocus();
+    }
+
+    /** Smallest unused "Sheet N" name, so deleting a sheet frees its number for reuse. */
+    private String nextSheetName() {
+        int n = 1;
+        while (nameExists("Sheet " + n)) {
+            n++;
+        }
+        return "Sheet " + n;
+    }
+
+    private boolean nameExists(String name) {
+        for (Sheet s : document.workspace().sheets()) {
+            if (s.name().equals(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void deleteSelected() {
@@ -483,15 +499,11 @@ public final class CanvasView extends StackPane {
             }
         }
 
-        // Name label drawn in content space so it tracks the sheet's scale/rotation.
-        Affine combined = viewport.toAffine();
-        combined.append(SheetGeometry.localToWorld(s));
-        g.save();
-        g.setTransform(combined);
+        // Name label in screen space (anchored to the top-left corner) so it never
+        // distorts with the sheet's scale.
         g.setFill(LABEL_COLOR);
-        g.setFont(Font.font(18));
-        g.fillText(s.name(), 6, 24);
-        g.restore();
+        g.setFont(LABEL_FONT);
+        g.fillText(s.name(), tl.x() + 6, tl.y() + 18);
 
         g.setStroke(BORDER);
         g.setLineWidth(1.5);
