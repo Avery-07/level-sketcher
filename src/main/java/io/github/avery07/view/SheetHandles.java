@@ -1,5 +1,6 @@
 package io.github.avery07.view;
 
+import io.github.avery07.geometry.Hit;
 import io.github.avery07.geometry.Vec2;
 import io.github.avery07.model.Sheet;
 
@@ -65,6 +66,20 @@ public final class SheetHandles {
             }
         }
         return best;
+    }
+
+    /** Shortest screen-space distance from a point to the sheet's frame outline. */
+    public static double borderDistance(Sheet s, Viewport vp, double sx, double sy) {
+        Vec2 tl = toScreen(s, s.left(), s.top(), vp);
+        Vec2 tr = toScreen(s, s.right(), s.top(), vp);
+        Vec2 br = toScreen(s, s.right(), s.bottom(), vp);
+        Vec2 bl = toScreen(s, s.left(), s.bottom(), vp);
+        Vec2 p = new Vec2(sx, sy);
+        double d = Hit.distanceToSegment(p, tl, tr);
+        d = Math.min(d, Hit.distanceToSegment(p, tr, br));
+        d = Math.min(d, Hit.distanceToSegment(p, br, bl));
+        d = Math.min(d, Hit.distanceToSegment(p, bl, tl));
+        return d;
     }
 
     private static Vec2 toScreen(Sheet s, double lx, double ly, Viewport vp) {

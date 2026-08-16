@@ -25,6 +25,7 @@ import io.github.avery07.tool.PolygonTool;
 import io.github.avery07.tool.RectangleTool;
 import io.github.avery07.tool.Tool;
 import io.github.avery07.view.render.WorkspaceRenderer;
+import javafx.scene.Cursor;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.control.TextField;
 import javafx.scene.input.KeyCode;
@@ -43,15 +44,16 @@ import java.util.List;
  * It owns the two stacked canvases and the inline rename editor, routes input, and serves as
  * the {@link CanvasContext} for drawing tools.
  *
- * <p>Selection is always available: clicking a shape or a handle selects/edits it regardless of
- * which {@link Tool} is active. The active tool only takes over when the click lands on empty
- * space (or the tool is mid-gesture, or it acts on shapes like the eraser). With no tool, empty
- * clicks fall back to sheet selection and panning. Double-click a sheet name to rename, or a
- * polygon edge to subdivide it.
+ * <p>Selection is always available and tool-independent: a shape, a handle, or a sheet's border
+ * band grabs/edits it regardless of the active {@link Tool}. The active tool draws only on an
+ * empty sheet body; off-sheet drags pan; there is no explicit Select tool (the resting state is
+ * simply "no tool"). Hovering a sheet reveals its grab handles and switches the cursor over the
+ * border band. Double-click a sheet name to rename, or a polygon edge to subdivide it.
  */
 public final class CanvasView extends StackPane implements CanvasContext {
 
     private static final double ELEMENT_HIT_PIXELS = 6;
+    private static final double BORDER_BAND = 6; // screen px grab band around a sheet's frame
 
     private enum Mode { NONE, PAN, SHEET, ELEMENT, ELEMENT_EDIT, TOOL }
 
@@ -102,7 +104,8 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     // ----- tool selection (wired to the toolbar) -----
 
-    public void useSelectTool() {
+    /** Return to the resting state where clicks only select/manipulate (no drawing tool). */
+    public void clearTool() {
         setActiveTool(null);
     }
 
@@ -264,23 +267,15 @@ public final class CanvasView extends StackPane implements CanvasContext {
             }
         }
 
-        // Selection is always available: clicking a shape or handle wins over the active tool.
+        // Selection is always available: a shape, a handle, or a sheet border wins over the tool.
         if (trySelectionPress(sx, sy, world)) {
             return;
         }
 
-        // Nothing to select: the active drawing tool handles the empty click.
-        if (activeTool != null) {
+        // Empty space. Draw only with a tool over a sheet body; otherwise deselect and pan
+        // (there is nothing to draw on off-sheet).
+        if (activeTool != null && sheetUnderCursor(world, sx, sy) != null) {
             beginTool(e);
-            return;
-        }
-
-        // No tool: click an empty sheet to select it, or empty canvas to deselect and pan.
-        Sheet captured = topmostAt(world);
-        if (captured != null) {
-            document.selectSheet(captured);
-            manipulator.beginMove(captured, world);
-            mode = Mode.SHEET;
             return;
         }
         document.clearSelection();
@@ -294,21 +289,15 @@ public final class CanvasView extends StackPane implements CanvasContext {
     }
 
     /**
-     * Attempt a selection/edit gesture — a sheet handle, an element edit handle, or an element
-     * under the cursor (the topmost sheet captures, so overlapped sheets can't be reached
-     * through). Returns true if one started.
+     * Attempt a selection/edit gesture, in priority order: the selected object's edit handles,
+     * then (on the topmost sheet under the cursor) a shape, then that sheet's border band to grab
+     * the sheet. The empty interior body is not a selection. Returns true if a gesture started.
      */
     private boolean trySelectionPress(double sx, double sy, Vec2 world) {
         Sheet selSheet = document.selectedSheet();
-        if (selSheet != null && document.selectedElement() == null) {
-            int handle = SheetHandles.hit(selSheet, viewport, sx, sy);
-            if (handle >= 0) {
-                manipulator.beginTransform(selSheet, handle, world);
-                mode = Mode.SHEET;
-                return true;
-            }
-        }
         Element selEl = document.selectedElement();
+
+        // 1. Edit handles of the selected element (vertex / edge / radius).
         if (selEl != null && selSheet != null) {
             ElementHandles.Hit h = ElementHandles.hitTest(selEl, selSheet, viewport, sx, sy);
             if (h != null) {
@@ -317,16 +306,58 @@ public final class CanvasView extends StackPane implements CanvasContext {
                 return true;
             }
         }
-        Sheet captured = topmostAt(world);
-        if (captured != null) {
-            Element hit = topmostElementIn(captured, world);
-            if (hit != null) {
-                document.selectElement(captured, hit);
-                beginElementMove(captured, hit, world);
-                return true;
+
+        Sheet owner = sheetUnderCursor(world, sx, sy);
+
+        // 2. Sheet transform handles (selected sheet first, then the hovered/owner sheet).
+        Sheet handleSheet = (selEl == null) ? selSheet : null;
+        int handle = (handleSheet != null) ? SheetHandles.hit(handleSheet, viewport, sx, sy) : -1;
+        if (handle < 0 && owner != null && owner != handleSheet) {
+            handle = SheetHandles.hit(owner, viewport, sx, sy);
+            if (handle >= 0) {
+                handleSheet = owner;
             }
         }
+        if (handle >= 0) {
+            document.selectSheet(handleSheet);
+            manipulator.beginTransform(handleSheet, handle, world);
+            mode = Mode.SHEET;
+            return true;
+        }
+
+        if (owner == null) {
+            return false;
+        }
+
+        // 3. A shape in the owner sheet's body.
+        Element shape = topmostElementIn(owner, world);
+        if (shape != null) {
+            document.selectElement(owner, shape);
+            beginElementMove(owner, shape, world);
+            return true;
+        }
+
+        // 4. The owner sheet's border band grabs the sheet.
+        if (SheetHandles.borderDistance(owner, viewport, sx, sy) <= BORDER_BAND) {
+            document.selectSheet(owner);
+            manipulator.beginMove(owner, world);
+            mode = Mode.SHEET;
+            return true;
+        }
         return false;
+    }
+
+    /** Topmost sheet whose body or border band is under the cursor, or {@code null}. */
+    private Sheet sheetUnderCursor(Vec2 world, double sx, double sy) {
+        var sheets = document.workspace().sheets();
+        for (int i = sheets.size() - 1; i >= 0; i--) {
+            Sheet s = sheets.get(i);
+            if (SheetGeometry.contains(s, world)
+                    || SheetHandles.borderDistance(s, viewport, sx, sy) <= BORDER_BAND) {
+                return s;
+            }
+        }
+        return null;
     }
 
     private void onDrag(MouseEvent e) {
@@ -403,6 +434,25 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private void onMove(MouseEvent e) {
         if (activeTool != null) {
             activeTool.onMove(this, pointer(e)); // the tool repaints only if it needs to
+        }
+        updateHover(e.getX(), e.getY());
+    }
+
+    /** Reveal the hovered sheet's handles and reflect grab/draw affordance in the cursor. */
+    private void updateHover(double sx, double sy) {
+        Vec2 world = worldOf(sx, sy);
+        Sheet owner = sheetUnderCursor(world, sx, sy);
+        document.setHoveredSheet(owner); // repaints only when the hovered sheet changes
+
+        boolean onShape = owner != null && topmostElementIn(owner, world) != null;
+        boolean onBorder = owner != null && !onShape
+                && SheetHandles.borderDistance(owner, viewport, sx, sy) <= BORDER_BAND;
+        if (onBorder) {
+            setCursor(Cursor.MOVE);
+        } else if (owner != null && !onShape && activeTool != null) {
+            setCursor(Cursor.CROSSHAIR); // empty body with a drawing tool → will draw
+        } else {
+            setCursor(Cursor.DEFAULT);
         }
     }
 

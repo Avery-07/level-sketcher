@@ -64,18 +64,28 @@ public final class WorkspaceRenderer {
     public void renderOverlay(GraphicsContext g, double w, double h) {
         g.setTransform(1, 0, 0, 1, 0, 0);
         g.clearRect(0, 0, w, h);
-        Sheet s = document.selectedSheet();
-        if (s == null) {
-            return;
-        }
-        Element el = document.selectedElement();
-        if (el != null) {
-            drawElementHighlight(g, s, el);
-            drawElementHandles(g, s, el);
-            return;
-        }
-        Vec2[] r = SheetHandles.screenPositions(s, viewport);
 
+        Sheet selectedSheet = document.selectedSheet();
+        Sheet hovered = document.hoveredSheet();
+        // Hover affordance: reveal a non-selected sheet's handles so its grab points are visible.
+        if (hovered != null && hovered != selectedSheet) {
+            drawSheetHandles(g, hovered);
+        }
+
+        Element el = document.selectedElement();
+        if (el != null && selectedSheet != null) {
+            drawElementHighlight(g, selectedSheet, el);
+            drawElementHandles(g, selectedSheet, el);
+            return;
+        }
+        if (selectedSheet != null) {
+            drawSheetOutline(g, selectedSheet);
+            drawSheetHandles(g, selectedSheet);
+        }
+    }
+
+    private void drawSheetOutline(GraphicsContext g, Sheet s) {
+        Vec2[] r = SheetHandles.screenPositions(s, viewport);
         g.setStroke(SELECTION);
         g.setLineWidth(1.5);
         g.strokePolygon(
@@ -83,9 +93,14 @@ public final class WorkspaceRenderer {
                         r[SheetHandles.BR].x(), r[SheetHandles.BL].x()},
                 new double[]{r[SheetHandles.TL].y(), r[SheetHandles.TR].y(),
                         r[SheetHandles.BR].y(), r[SheetHandles.BL].y()}, 4);
+    }
+
+    private void drawSheetHandles(GraphicsContext g, Sheet s) {
+        Vec2[] r = SheetHandles.screenPositions(s, viewport);
+        g.setStroke(SELECTION);
+        g.setLineWidth(1.5);
         g.strokeLine(r[SheetHandles.TOP].x(), r[SheetHandles.TOP].y(),
                 r[SheetHandles.ROTATE].x(), r[SheetHandles.ROTATE].y());
-
         g.setFill(HANDLE_FILL);
         for (int i = 0; i < SheetHandles.ROTATE; i++) {
             square(g, r[i]);

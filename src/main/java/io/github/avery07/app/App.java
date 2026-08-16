@@ -43,13 +43,12 @@ public final class App extends Application {
 
     private ToolBar buildToolBar(CanvasView canvas) {
         ToggleGroup tools = new ToggleGroup();
-        ToggleButton select = toolButton("Select", tools, canvas::useSelectTool);
-        ToggleButton rectangle = toolButton("Rectangle", tools, canvas::useRectangleTool);
-        ToggleButton circle = toolButton("Circle", tools, canvas::useCircleTool);
-        ToggleButton polygon = toolButton("Polygon", tools, canvas::usePolygonTool);
-        ToggleButton freehand = toolButton("Freehand", tools, canvas::useFreehandTool);
-        ToggleButton erase = toolButton("Erase", tools, canvas::useEraserTool);
-        select.setSelected(true);
+        ToggleButton rectangle = toolButton("Rectangle", tools, canvas, canvas::useRectangleTool);
+        ToggleButton circle = toolButton("Circle", tools, canvas, canvas::useCircleTool);
+        ToggleButton polygon = toolButton("Polygon", tools, canvas, canvas::usePolygonTool);
+        ToggleButton freehand = toolButton("Freehand", tools, canvas, canvas::useFreehandTool);
+        ToggleButton erase = toolButton("Erase", tools, canvas, canvas::useEraserTool);
+        // No tool selected at startup: the app rests in the select/manipulate state.
 
         Button addSheet = new Button("Add Sheet");
         addSheet.setOnAction(e -> canvas.addSheetAtCenter());
@@ -60,23 +59,23 @@ public final class App extends Application {
         Button redo = new Button("Redo");
         redo.setOnAction(e -> canvas.redo());
 
-        Label hint = new Label("Click a shape to select/edit it (any tool); "
-                + "click empty space to use the active tool · Scroll = zoom · middle-drag = pan");
+        Label hint = new Label("Click a shape or a sheet's edge to grab it (any tool); "
+                + "click empty space to draw with the active tool · Scroll = zoom · middle-drag = pan");
         hint.setPadding(new Insets(0, 0, 0, 8));
 
-        return new ToolBar(select, rectangle, circle, polygon, freehand, erase, new Separator(),
+        return new ToolBar(rectangle, circle, polygon, freehand, erase, new Separator(),
                 addSheet, delete, new Separator(), undo, redo, new Separator(), hint);
     }
 
-    private ToggleButton toolButton(String text, ToggleGroup group, Runnable onSelect) {
+    private ToggleButton toolButton(String text, ToggleGroup group, CanvasView canvas, Runnable onSelect) {
         ToggleButton button = new ToggleButton(text);
         button.setToggleGroup(group);
         button.setOnAction(e -> {
             if (button.isSelected()) {
                 onSelect.run();
             } else {
-                // Prevent deselecting the active tool by clicking it again.
-                button.setSelected(true);
+                // Toggling the active tool off returns to the resting select state.
+                canvas.clearTool();
             }
         });
         return button;

@@ -28,6 +28,7 @@ public final class Document {
 
     private Sheet selectedSheet;
     private Element selectedElement;
+    private Sheet hoveredSheet;   // transient UI hover, not part of the document
     private Path file;      // null until first save
     private boolean dirty;
 
@@ -67,6 +68,18 @@ public final class Document {
         if (selectedSheet != null || selectedElement != null) {
             selectedSheet = null;
             selectedElement = null;
+            fireChanged();
+        }
+    }
+
+    public Sheet hoveredSheet() {
+        return hoveredSheet;
+    }
+
+    /** Set the sheet under the cursor for hover affordances; notifies only when it changes. */
+    public void setHoveredSheet(Sheet sheet) {
+        if (hoveredSheet != sheet) {
+            hoveredSheet = sheet;
             fireChanged();
         }
     }
