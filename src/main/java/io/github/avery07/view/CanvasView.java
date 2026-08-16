@@ -688,17 +688,24 @@ public final class CanvasView extends StackPane implements CanvasContext {
         return true;
     }
 
-    /** Topmost element of a single sheet under a world point, or {@code null}. */
+    /** Topmost element of a sheet under a world point, across visible layers, or {@code null}. */
     private Element topmostElementIn(Sheet s, Vec2 world) {
         Vec2 local = SheetGeometry.worldToLocal(s, world);
         if (local == null) {
             return null;
         }
         double tol = elementToleranceLocal(s);
-        var elements = s.elements();
-        for (int j = elements.size() - 1; j >= 0; j--) {
-            if (elements.get(j).hitTest(local, tol)) {
-                return elements.get(j);
+        var layers = s.layers();
+        for (int li = layers.size() - 1; li >= 0; li--) {
+            var layer = layers.get(li);
+            if (!layer.isVisible()) {
+                continue;
+            }
+            var elements = layer.elements();
+            for (int j = elements.size() - 1; j >= 0; j--) {
+                if (elements.get(j).hitTest(local, tol)) {
+                    return elements.get(j);
+                }
             }
         }
         return null;
@@ -732,7 +739,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
             return;
         }
         Element e = document.selectedElement();
-        if (e != null && s != null && !s.elements().contains(e)) {
+        if (e != null && s != null && s.layerOf(e) == null) {
             document.clearSelection();
         }
     }

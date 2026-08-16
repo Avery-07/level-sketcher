@@ -2,6 +2,7 @@ package io.github.avery07.view.render;
 
 import io.github.avery07.document.Document;
 import io.github.avery07.geometry.Vec2;
+import io.github.avery07.model.Layer;
 import io.github.avery07.model.Sheet;
 import io.github.avery07.model.Style;
 import io.github.avery07.model.element.Circle;
@@ -124,8 +125,13 @@ public final class WorkspaceRenderer {
 
         drawGrid(g, s);
 
-        for (Element e : s.elements()) {
-            drawElement(g, s, e);
+        for (Layer layer : s.layers()) {
+            if (!layer.isVisible()) {
+                continue;
+            }
+            for (Element e : layer.elements()) {
+                drawElement(g, s, e);
+            }
         }
 
         // Label in screen space at a fixed size, so it never distorts with the sheet.

@@ -1,6 +1,7 @@
 package io.github.avery07.app;
 
 import io.github.avery07.document.Document;
+import io.github.avery07.ui.LayersPanel;
 import io.github.avery07.view.CanvasView;
 import javafx.application.Application;
 import javafx.geometry.Insets;
@@ -31,6 +32,7 @@ public final class App extends Application {
         BorderPane root = new BorderPane();
         root.setTop(buildToolBar(canvas));
         root.setCenter(canvas);
+        root.setRight(new LayersPanel(document));
 
         Scene scene = new Scene(root, 1280, 800);
         stage.setScene(scene);

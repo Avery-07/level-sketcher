@@ -1,27 +1,28 @@
 package io.github.avery07.command;
 
+import io.github.avery07.model.Layer;
 import io.github.avery07.model.Sheet;
 import io.github.avery07.model.element.Element;
 
-/** Adds an element to a sheet (undo removes it). */
+/** Adds an element to a sheet's active layer (undo removes it). */
 public final class AddElementCommand implements Command {
 
-    private final Sheet sheet;
+    private final Layer layer;
     private final Element element;
 
     public AddElementCommand(Sheet sheet, Element element) {
-        this.sheet = sheet;
+        this.layer = sheet.activeLayer();
         this.element = element;
     }
 
     @Override
     public void execute() {
-        sheet.addElement(element);
+        layer.addElement(element);
     }
 
     @Override
     public void undo() {
-        sheet.removeElement(element);
+        layer.removeElement(element);
     }
 
     @Override

@@ -33,7 +33,8 @@ public final class Sheet {
     private double top;
     private double right;
     private double bottom;
-    private final List<Element> elements = new ArrayList<>();
+    private final List<Layer> layers = new ArrayList<>();
+    private Layer activeLayer;
 
     public Sheet(String name, Vec2 center, double width, double height) {
         this.name = name;
@@ -44,6 +45,9 @@ public final class Sheet {
         this.bottom = height;
         this.scale = 1;
         this.rotation = 0;
+        Layer first = new Layer("Layer 1");
+        layers.add(first);
+        activeLayer = first;
     }
 
     public String name() {
@@ -128,21 +132,45 @@ public final class Sheet {
         return (top + bottom) / 2;
     }
 
-    /** Live, mutable list of elements in z-order (last = topmost). */
-    public List<Element> elements() {
-        return elements;
+    /** Live, mutable list of layers in z-order (last = topmost). Always non-empty. */
+    public List<Layer> layers() {
+        return layers;
     }
 
-    public void addElement(Element element) {
-        elements.add(element);
+    /** The layer new elements are added to. */
+    public Layer activeLayer() {
+        return activeLayer;
     }
 
-    public void addElement(int index, Element element) {
-        elements.add(index, element);
+    public void setActiveLayer(Layer layer) {
+        if (layers.contains(layer)) {
+            activeLayer = layer;
+        }
     }
 
-    public void removeElement(Element element) {
-        elements.remove(element);
+    public void addLayer(Layer layer) {
+        layers.add(layer);
+    }
+
+    public void addLayer(int index, Layer layer) {
+        layers.add(index, layer);
+    }
+
+    public void removeLayer(Layer layer) {
+        layers.remove(layer);
+        if (activeLayer == layer) {
+            activeLayer = layers.isEmpty() ? null : layers.get(layers.size() - 1);
+        }
+    }
+
+    /** The layer containing the given element, or {@code null} if none. */
+    public Layer layerOf(Element element) {
+        for (Layer layer : layers) {
+            if (layer.elements().contains(element)) {
+                return layer;
+            }
+        }
+        return null;
     }
 
     /** Immutable snapshot of the geometry, used for undo/redo of transforms. */

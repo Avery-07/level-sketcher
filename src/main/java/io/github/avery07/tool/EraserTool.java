@@ -2,6 +2,7 @@ package io.github.avery07.tool;
 
 import io.github.avery07.command.EraseStrokesCommand;
 import io.github.avery07.geometry.Vec2;
+import io.github.avery07.model.Layer;
 import io.github.avery07.model.Sheet;
 import io.github.avery07.model.element.Element;
 import io.github.avery07.model.element.FreehandStroke;
@@ -96,20 +97,25 @@ public final class EraserTool implements Tool {
             }
             double tolerance = radiusWorld / Math.max(1e-6, s.scale());
 
-            List<Element> hits = null;
-            for (Element e : s.elements()) {
-                if (e instanceof FreehandStroke stroke && stroke.hitTest(local, tolerance)) {
-                    if (hits == null) {
-                        hits = new ArrayList<>();
-                    }
-                    hits.add(e);
+            for (Layer layer : s.layers()) {
+                if (!layer.isVisible()) {
+                    continue;
                 }
-            }
-            if (hits != null) {
-                for (Element e : hits) {
-                    erased.add(new EraseStrokesCommand.Removed(s, e, s.elements().indexOf(e)));
-                    s.removeElement(e);
-                    changed = true;
+                List<Element> hits = null;
+                for (Element e : layer.elements()) {
+                    if (e instanceof FreehandStroke stroke && stroke.hitTest(local, tolerance)) {
+                        if (hits == null) {
+                            hits = new ArrayList<>();
+                        }
+                        hits.add(e);
+                    }
+                }
+                if (hits != null) {
+                    for (Element e : hits) {
+                        erased.add(new EraseStrokesCommand.Removed(layer, e, layer.elements().indexOf(e)));
+                        layer.removeElement(e);
+                        changed = true;
+                    }
                 }
             }
         }
