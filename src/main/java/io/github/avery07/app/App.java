@@ -1,7 +1,6 @@
 package io.github.avery07.app;
 
 import io.github.avery07.document.Document;
-import io.github.avery07.ui.InspectorPanel;
 import io.github.avery07.view.CanvasView;
 import javafx.application.Application;
 import javafx.geometry.Insets;
@@ -32,7 +31,6 @@ public final class App extends Application {
         BorderPane root = new BorderPane();
         root.setTop(buildToolBar(canvas));
         root.setCenter(canvas);
-        root.setRight(new InspectorPanel(document));
 
         Scene scene = new Scene(root, 1280, 800);
         stage.setScene(scene);
@@ -61,8 +59,8 @@ public final class App extends Application {
         Button redo = new Button("Redo");
         redo.setOnAction(e -> canvas.redo());
 
-        Label hint = new Label("Click a shape or a sheet's edge to grab it (any tool); "
-                + "click empty space to draw with the active tool · Scroll = zoom · middle-drag = pan");
+        Label hint = new Label("Grab a shape/sheet by its outline (any tool) · draw on empty space · "
+                + "right-click an object for its properties · scroll = zoom · middle-drag = pan");
         hint.setPadding(new Insets(0, 0, 0, 8));
 
         return new ToolBar(rectangle, circle, polygon, freehand, erase, new Separator(),

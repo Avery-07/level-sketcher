@@ -24,6 +24,7 @@ import io.github.avery07.tool.PointerInput;
 import io.github.avery07.tool.PolygonTool;
 import io.github.avery07.tool.RectangleTool;
 import io.github.avery07.tool.Tool;
+import io.github.avery07.ui.InspectorPopup;
 import io.github.avery07.view.render.WorkspaceRenderer;
 import javafx.scene.Cursor;
 import javafx.scene.canvas.Canvas;
@@ -62,6 +63,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private final WorkspaceRenderer renderer;
     private final SheetManipulator manipulator = new SheetManipulator();
     private final ElementEditor elementEditor = new ElementEditor();
+    private final InspectorPopup inspector;
 
     private final Canvas content = new Canvas();
     private final Canvas overlay = new Canvas();
@@ -82,6 +84,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
     public CanvasView(Document document) {
         this.document = document;
         this.renderer = new WorkspaceRenderer(document, viewport);
+        this.inspector = new InspectorPopup(document);
 
         content.setMouseTransparent(true);
         overlay.setMouseTransparent(true);
@@ -149,6 +152,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
     }
 
     public void deleteSelected() {
+        inspector.hide();
         Element el = document.selectedElement();
         if (el != null) {
             Sheet owner = document.selectedSheet();
@@ -234,10 +238,15 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private void onPress(MouseEvent e) {
         requestFocus();
         commitRename();
+        inspector.hide(); // any press on the canvas dismisses the inspector popup
 
         double sx = e.getX(), sy = e.getY();
         if (e.getButton() == MouseButton.MIDDLE) {
             beginPan(sx, sy);
+            return;
+        }
+        if (e.getButton() == MouseButton.SECONDARY) {
+            onRightClick(e);
             return;
         }
         if (e.getButton() != MouseButton.PRIMARY) {
@@ -280,6 +289,23 @@ public final class CanvasView extends StackPane implements CanvasContext {
         }
         document.clearSelection();
         beginPan(sx, sy);
+    }
+
+    /** Right-click selects the object under the cursor and opens the inspector popup on it. */
+    private void onRightClick(MouseEvent e) {
+        Vec2 world = worldOf(e.getX(), e.getY());
+        Sheet owner = sheetUnderCursor(world, e.getX(), e.getY());
+        if (owner == null) {
+            document.clearSelection();
+            return;
+        }
+        Element shape = topmostElementIn(owner, world);
+        if (shape != null) {
+            document.selectElement(owner, shape);
+        } else {
+            document.selectSheet(owner);
+        }
+        inspector.showFor(this, e.getScreenX(), e.getScreenY());
     }
 
     private void beginTool(MouseEvent e) {
@@ -480,7 +506,9 @@ public final class CanvasView extends StackPane implements CanvasContext {
             return;
         }
         if (c == KeyCode.ESCAPE) {
-            if (activeTool != null && activeTool.inProgress()) {
+            if (inspector.isShowing()) {
+                inspector.hide();
+            } else if (activeTool != null && activeTool.inProgress()) {
                 activeTool.cancel(this);
             } else {
                 document.clearSelection();

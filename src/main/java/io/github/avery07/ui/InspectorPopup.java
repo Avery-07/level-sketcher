@@ -10,60 +10,79 @@ import io.github.avery07.model.element.Element;
 import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.FreehandStroke;
 import javafx.geometry.Insets;
+import javafx.scene.Node;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
+import javafx.scene.effect.DropShadow;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.stage.Popup;
 
 /**
- * The Inspector (spec §7.6): shows the selected element's editable parameters and applies edits
- * live, through undoable commands. Rebuilt only when the selection <em>identity</em> changes, so
- * ongoing edits (dragging a handle) don't tear down the controls.
+ * A compact floating inspector (spec §7.6) shown at the cursor when an object is right-clicked.
+ * It edits the current selection's parameters live, through undoable commands, and is dismissed
+ * by pressing elsewhere on the canvas or Escape.
  */
-public final class InspectorPanel extends VBox {
+public final class InspectorPopup {
 
     private final Document document;
-    private Object currentTarget;
+    private final Popup popup = new Popup();
+    private final VBox content = new VBox(8);
 
-    public InspectorPanel(Document document) {
+    public InspectorPopup(Document document) {
         this.document = document;
-        setSpacing(8);
-        setPadding(new Insets(10));
-        setPrefWidth(240);
-        setMinWidth(240);
-        document.addChangeListener(this::onDocumentChanged);
-        rebuild();
+        content.setPadding(new Insets(10));
+        content.setMinWidth(190);
+        content.setStyle("-fx-background-color: white;"
+                + "-fx-border-color: #8a8a8a; -fx-border-width: 1;"
+                + "-fx-background-radius: 5; -fx-border-radius: 5;");
+        content.setEffect(new DropShadow(8, Color.rgb(0, 0, 0, 0.35)));
+        content.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == KeyCode.ESCAPE) {
+                hide();
+                e.consume();
+            }
+        });
+        popup.getContent().add(content);
+        popup.setAutoHide(false); // dismissed explicitly, to play nicely with the colour pickers
     }
 
-    private void onDocumentChanged() {
-        Object target = document.selectedElement() != null
-                ? document.selectedElement() : document.selectedSheet();
-        if (target != currentTarget) {
-            currentTarget = target;
-            rebuild();
-        }
+    public boolean isShowing() {
+        return popup.isShowing();
     }
 
-    private void rebuild() {
-        getChildren().clear();
+    public void hide() {
+        popup.hide();
+    }
+
+    /** Build controls for the current selection and show the popup at a screen location. */
+    public void showFor(Node owner, double screenX, double screenY) {
         Element element = document.selectedElement();
         Sheet sheet = document.selectedSheet();
+        content.getChildren().clear();
         if (element != null) {
-            buildElementInspector(element);
+            buildElement(element);
         } else if (sheet != null) {
-            buildSheetInspector(sheet);
+            buildSheet(sheet);
         } else {
-            getChildren().add(new Label("No selection"));
+            return;
+        }
+        if (popup.isShowing()) {
+            popup.setX(screenX);
+            popup.setY(screenY);
+        } else {
+            popup.show(owner, screenX, screenY);
         }
     }
 
-    private void buildElementInspector(Element element) {
-        getChildren().add(title(typeName(element)));
-
+    private void buildElement(Element element) {
+        content.getChildren().add(title(typeName(element)));
         Style style = element.style();
 
         ColorPicker stroke = new ColorPicker(Color.web(style.stroke()));
@@ -83,10 +102,10 @@ public final class InspectorPanel extends VBox {
         fillOn.setOnAction(e -> apply.run());
         width.valueProperty().addListener((o, ov, nv) -> apply.run());
 
-        getChildren().addAll(
+        content.getChildren().addAll(
                 labeled("Stroke", stroke),
-                labeled("", fillOn),
-                labeled("Fill color", fill),
+                fillOn,
+                labeled("Fill colour", fill),
                 labeled("Stroke width", width));
     }
 
@@ -99,9 +118,8 @@ public final class InspectorPanel extends VBox {
         }
     }
 
-    private void buildSheetInspector(Sheet sheet) {
-        getChildren().add(title("Sheet"));
-
+    private void buildSheet(Sheet sheet) {
+        content.getChildren().add(title("Sheet"));
         TextField name = new TextField(sheet.name());
         name.setOnAction(e -> {
             String text = name.getText().trim();
@@ -110,11 +128,8 @@ public final class InspectorPanel extends VBox {
                 document.markDirty();
             }
         });
-
-        Label size = new Label(String.format("Size: %.0f × %.0f",
-                sheet.width(), sheet.height()));
-
-        getChildren().addAll(labeled("Name", name), size);
+        content.getChildren().addAll(labeled("Name", name),
+                new Label(String.format("Size: %.0f × %.0f", sheet.width(), sheet.height())));
     }
 
     private static String typeName(Element e) {
@@ -131,12 +146,8 @@ public final class InspectorPanel extends VBox {
         return label;
     }
 
-    private static VBox labeled(String caption, javafx.scene.Node control) {
-        VBox box = new VBox(2);
-        if (!caption.isEmpty()) {
-            box.getChildren().add(new Label(caption));
-        }
-        box.getChildren().add(control);
+    private static VBox labeled(String caption, Node control) {
+        VBox box = new VBox(2, new Label(caption), control);
         return box;
     }
 
