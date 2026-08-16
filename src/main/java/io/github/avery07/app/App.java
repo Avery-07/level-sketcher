@@ -1,16 +1,20 @@
 package io.github.avery07.app;
 
 import io.github.avery07.document.Document;
+import io.github.avery07.view.CanvasView;
 import javafx.application.Application;
+import javafx.geometry.Insets;
 import javafx.scene.Scene;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.Separator;
+import javafx.scene.control.ToolBar;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 
 /**
- * The JavaFX application shell. Builds the main window and owns the top-level
- * {@link Document}. The canvas, tools, and side panels are added in later phases.
+ * The JavaFX application shell. Builds the main window (toolbar + canvas) and owns the
+ * top-level {@link Document}.
  */
 public final class App extends Application {
 
@@ -20,17 +24,41 @@ public final class App extends Application {
 
     @Override
     public void start(Stage stage) {
-        BorderPane root = new BorderPane();
+        CanvasView canvas = new CanvasView(document);
 
-        // Placeholder for the canvas workspace (Phase 1 replaces this with CanvasView).
-        StackPane workspace = new StackPane(new Label("Canvas workspace — Phase 1"));
-        root.setCenter(workspace);
+        BorderPane root = new BorderPane();
+        root.setTop(buildToolBar(canvas));
+        root.setCenter(canvas);
 
         Scene scene = new Scene(root, 1280, 800);
         stage.setScene(scene);
         stage.setTitle(titleFor(document));
         document.addChangeListener(() -> stage.setTitle(titleFor(document)));
         stage.show();
+        canvas.requestFocus();
+        canvas.requestRender();
+    }
+
+    private ToolBar buildToolBar(CanvasView canvas) {
+        Button addSheet = new Button("Add Sheet");
+        addSheet.setOnAction(e -> canvas.addSheetAtCenter());
+
+        Button delete = new Button("Delete");
+        delete.setOnAction(e -> canvas.deleteSelected());
+
+        Button undo = new Button("Undo");
+        undo.setOnAction(e -> canvas.undo());
+
+        Button redo = new Button("Redo");
+        redo.setOnAction(e -> canvas.redo());
+
+        Label hint = new Label(
+                "Scroll = zoom · drag empty space or middle-drag = pan · "
+                + "corners scale · edges extend · top handle rotates");
+        hint.setPadding(new Insets(0, 0, 0, 8));
+
+        return new ToolBar(addSheet, delete, new Separator(), undo, redo,
+                new Separator(), hint);
     }
 
     /** Window title with the unsaved-changes indicator (spec §7.9). */
