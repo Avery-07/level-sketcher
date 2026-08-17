@@ -18,7 +18,7 @@ import java.util.List;
  */
 public final class ElementHandles {
 
-    public enum Kind { VERTEX, EDGE, RADIUS }
+    public enum Kind { VERTEX, EDGE, RADIUS, CONE_DIR, CONE_FOV }
 
     public record Hit(Kind kind, int index) {
     }
@@ -51,9 +51,45 @@ public final class ElementHandles {
             case Circle c -> out.add(new Handle(Kind.RADIUS, 0,
                     screen(s, new Vec2(c.center().x() + c.radius(), c.center().y()), vp)));
             case FreehandStroke f -> { }
-            case SymbolInstance sym -> { } // symbols move as a whole; anchor editing is a later phase
+            case SymbolInstance sym -> symbolHandles(out, sym, s, vp);
         }
         return out;
+    }
+
+    private static void symbolHandles(List<Handle> out, SymbolInstance sym, Sheet s, Viewport vp) {
+        List<Vec2> a = sym.anchors();
+        if (a.isEmpty()) {
+            return;
+        }
+        switch (sym.type().pattern()) {
+            case MARKER -> out.add(new Handle(Kind.VERTEX, 0, screen(s, a.get(0), vp)));
+            case PARAMETRIC -> {
+                Vec2 anchor = a.get(0);
+                double facing = Math.toRadians(sym.param("facing"));
+                double half = Math.toRadians(sym.param("fov")) / 2;
+                double range = sym.param("range");
+                out.add(new Handle(Kind.VERTEX, 0, screen(s, anchor, vp)));
+                out.add(new Handle(Kind.CONE_DIR, 0, screen(s, new Vec2(
+                        anchor.x() + range * Math.cos(facing), anchor.y() + range * Math.sin(facing)), vp)));
+                out.add(new Handle(Kind.CONE_FOV, 0, screen(s, new Vec2(
+                        anchor.x() + range * Math.cos(facing + half),
+                        anchor.y() + range * Math.sin(facing + half)), vp)));
+            }
+            case PATH, REGION -> {
+                int n = a.size();
+                boolean closed = sym.type().pattern() == io.github.avery07.model.symbol.PlacementPattern.REGION;
+                for (int i = 0; i < n; i++) {
+                    out.add(new Handle(Kind.VERTEX, i, screen(s, a.get(i), vp)));
+                }
+                int edges = closed ? n : n - 1;
+                for (int i = 0; i < edges; i++) {
+                    Vec2 p = a.get(i);
+                    Vec2 q = a.get((i + 1) % n);
+                    out.add(new Handle(Kind.EDGE, i,
+                            screen(s, new Vec2((p.x() + q.x()) / 2, (p.y() + q.y()) / 2), vp)));
+                }
+            }
+        }
     }
 
     /** Nearest handle within {@link #HIT_RADIUS}, preferring vertex/radius handles over edges. */

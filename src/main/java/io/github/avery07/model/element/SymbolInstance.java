@@ -46,6 +46,12 @@ public final class SymbolInstance implements Element {
         return anchors;
     }
 
+    /** Replace all anchors (used by undo/redo of anchor edits). */
+    public void setAnchors(List<Vec2> newAnchors) {
+        anchors.clear();
+        anchors.addAll(newAnchors);
+    }
+
     public double param(String key) {
         return params.getOrDefault(key, 0.0);
     }

@@ -9,6 +9,7 @@ import io.github.avery07.command.RemoveSheetCommand;
 import io.github.avery07.command.RenameSheetCommand;
 import io.github.avery07.command.SetPolygonVerticesCommand;
 import io.github.avery07.command.SetSheetStateCommand;
+import io.github.avery07.command.SetSymbolAnchorsCommand;
 import io.github.avery07.document.Document;
 import io.github.avery07.document.EditorMode;
 import io.github.avery07.geometry.Hit;
@@ -16,6 +17,7 @@ import io.github.avery07.geometry.Vec2;
 import io.github.avery07.model.Sheet;
 import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.Element;
+import io.github.avery07.model.element.SymbolInstance;
 import io.github.avery07.tool.CanvasContext;
 import io.github.avery07.tool.CircleTool;
 import io.github.avery07.tool.EraserTool;
@@ -354,10 +356,9 @@ public final class CanvasView extends StackPane implements CanvasContext {
             beginTool(e);
             return;
         }
-        if (e.getClickCount() == 2
-                && document.selectedElement() instanceof EditablePolygon poly
+        if (e.getClickCount() == 2 && document.selectedElement() != null
                 && document.selectedSheet() != null
-                && subdivideEdge(poly, document.selectedSheet(), world)) {
+                && subdivideEdge(document.selectedElement(), document.selectedSheet(), world)) {
             return;
         }
         Element selEl = document.selectedElement();
@@ -734,19 +735,35 @@ public final class CanvasView extends StackPane implements CanvasContext {
         return null;
     }
 
-    /** Insert a vertex where an edge of the polygon was clicked; returns false if no edge is near. */
-    private boolean subdivideEdge(EditablePolygon p, Sheet s, Vec2 world) {
+    /** Insert a vertex/anchor where an edge of a polygon or path/region symbol was clicked. */
+    private boolean subdivideEdge(Element el, Sheet s, Vec2 world) {
+        List<Vec2> pts;
+        boolean closed;
+        if (el instanceof EditablePolygon p) {
+            pts = p.vertices();
+            closed = true;
+        } else if (el instanceof SymbolInstance sym) {
+            var pattern = sym.type().pattern();
+            if (pattern != io.github.avery07.model.symbol.PlacementPattern.PATH
+                    && pattern != io.github.avery07.model.symbol.PlacementPattern.REGION) {
+                return false;
+            }
+            pts = sym.anchors();
+            closed = pattern == io.github.avery07.model.symbol.PlacementPattern.REGION;
+        } else {
+            return false;
+        }
         Vec2 local = SheetGeometry.worldToLocal(s, world);
         if (local == null) {
             return false;
         }
-        List<Vec2> vs = p.vertices();
-        int n = vs.size();
+        int n = pts.size();
         double tol = elementToleranceLocal(s);
         int bestEdge = -1;
         double bestDist = tol;
-        for (int i = 0; i < n; i++) {
-            double d = Hit.distanceToSegment(local, vs.get(i), vs.get((i + 1) % n));
+        int edges = closed ? n : n - 1;
+        for (int i = 0; i < edges; i++) {
+            double d = Hit.distanceToSegment(local, pts.get(i), pts.get((i + 1) % n));
             if (d <= bestDist) {
                 bestDist = d;
                 bestEdge = i;
@@ -755,10 +772,14 @@ public final class CanvasView extends StackPane implements CanvasContext {
         if (bestEdge < 0) {
             return false;
         }
-        List<Vec2> before = new ArrayList<>(vs);
-        List<Vec2> after = new ArrayList<>(vs);
+        List<Vec2> before = new ArrayList<>(pts);
+        List<Vec2> after = new ArrayList<>(pts);
         after.add(bestEdge + 1, local);
-        execute(new SetPolygonVerticesCommand(p, before, after));
+        if (el instanceof EditablePolygon p) {
+            execute(new SetPolygonVerticesCommand(p, before, after));
+        } else {
+            execute(new SetSymbolAnchorsCommand((SymbolInstance) el, before, after));
+        }
         return true;
     }
 

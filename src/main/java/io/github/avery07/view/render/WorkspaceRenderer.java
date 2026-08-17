@@ -352,19 +352,16 @@ public final class WorkspaceRenderer {
         for (ElementHandles.Handle h : ElementHandles.handles(e, s, viewport)) {
             Vec2 p = h.screen();
             double sz = ElementHandles.SIZE;
-            switch (h.kind()) {
-                case VERTEX, RADIUS -> {
-                    g.setFill(HANDLE_FILL);
-                    g.setStroke(SELECTION);
-                    g.setLineWidth(1.5);
-                    g.fillRect(p.x() - sz / 2, p.y() - sz / 2, sz, sz);
-                    g.strokeRect(p.x() - sz / 2, p.y() - sz / 2, sz, sz);
-                }
-                case EDGE -> {
-                    g.setFill(SELECTION);
-                    double d = sz - 2;
-                    g.fillOval(p.x() - d / 2, p.y() - d / 2, d, d);
-                }
+            if (h.kind() == ElementHandles.Kind.EDGE) {
+                g.setFill(SELECTION);
+                double d = sz - 2;
+                g.fillOval(p.x() - d / 2, p.y() - d / 2, d, d);
+            } else {
+                g.setFill(HANDLE_FILL);
+                g.setStroke(SELECTION);
+                g.setLineWidth(1.5);
+                g.fillRect(p.x() - sz / 2, p.y() - sz / 2, sz, sz);
+                g.strokeRect(p.x() - sz / 2, p.y() - sz / 2, sz, sz);
             }
         }
     }
