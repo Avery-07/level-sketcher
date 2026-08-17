@@ -10,6 +10,7 @@ import io.github.avery07.command.RenameSheetCommand;
 import io.github.avery07.command.SetPolygonVerticesCommand;
 import io.github.avery07.command.SetSheetStateCommand;
 import io.github.avery07.document.Document;
+import io.github.avery07.document.EditorMode;
 import io.github.avery07.geometry.Hit;
 import io.github.avery07.geometry.Vec2;
 import io.github.avery07.model.Sheet;
@@ -45,11 +46,11 @@ import java.util.List;
  * It owns the two stacked canvases and the inline rename editor, routes input, and serves as
  * the {@link CanvasContext} for drawing tools.
  *
- * <p>Selection is always available and tool-independent: a shape, a handle, or a sheet's border
- * band grabs/edits it regardless of the active {@link Tool}. The active tool draws only on an
- * empty sheet body; off-sheet drags pan; there is no explicit Select tool (the resting state is
- * simply "no tool"). Hovering a sheet reveals its grab handles and switches the cursor over the
- * border band. Double-click a sheet name to rename, or a polygon edge to subdivide it.
+ * <p>Interaction is split by {@link EditorMode}. In <b>Assembly</b> only sheets are interactive
+ * (select/move by grabbing anywhere on a sheet, resize/rotate/extend via handles, rename); in
+ * <b>Edition</b> only sheet content is (draw with the active {@link Tool}, select/move/edit
+ * elements by their outline and handles). Off-sheet (and empty-body) drags pan in both. Right-
+ * click opens the inspector — a shape's style, or a sheet's name + layers.
  */
 public final class CanvasView extends StackPane implements CanvasContext {
 
@@ -153,19 +154,19 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     public void deleteSelected() {
         inspector.hide();
-        Element el = document.selectedElement();
-        if (el != null) {
+        if (document.editorMode() == EditorMode.ASSEMBLY) {
+            Sheet s = document.selectedSheet();
+            if (s != null) {
+                execute(new RemoveSheetCommand(document.workspace(), s));
+                document.clearSelection();
+            }
+        } else {
+            Element el = document.selectedElement();
             Sheet owner = document.selectedSheet();
-            if (owner != null) {
+            if (el != null && owner != null) {
                 execute(new RemoveElementCommand(owner, el));
                 document.clearSelection();
             }
-            return;
-        }
-        Sheet s = document.selectedSheet();
-        if (s != null) {
-            execute(new RemoveSheetCommand(document.workspace(), s));
-            document.clearSelection();
         }
     }
 
@@ -258,14 +259,16 @@ public final class CanvasView extends StackPane implements CanvasContext {
             return;
         }
 
-        // A tool mid-gesture, or one that acts on shapes (eraser), keeps control of the click.
-        if (activeTool != null && (activeTool.inProgress() || activeTool.overridesSelection())) {
-            beginTool(e);
-            return;
-        }
-
         Vec2 world = worldOf(sx, sy);
+        if (document.editorMode() == EditorMode.ASSEMBLY) {
+            pressAssembly(sx, sy, world, e);
+        } else {
+            pressEdition(sx, sy, world, e);
+        }
+    }
 
+    /** Assembly mode: only sheets are interactive (select, move, resize/rotate/extend, rename). */
+    private void pressAssembly(double sx, double sy, Vec2 world, MouseEvent e) {
         if (e.getClickCount() == 2) {
             Sheet hit = topmostAt(world);
             if (hit != null && labelHit(hit, sx, sy)) {
@@ -273,109 +276,98 @@ public final class CanvasView extends StackPane implements CanvasContext {
                 startRename(hit);
                 return;
             }
-            // Double-click an edge of the selected polygon to subdivide it.
-            if (document.selectedElement() instanceof EditablePolygon poly
-                    && document.selectedSheet() != null
-                    && subdivideEdge(poly, document.selectedSheet(), world)) {
+        }
+        Sheet selected = document.selectedSheet();
+        if (selected != null) {
+            int handle = SheetHandles.hit(selected, viewport, sx, sy);
+            if (handle >= 0) {
+                manipulator.beginTransform(selected, handle, world);
+                mode = Mode.SHEET;
                 return;
             }
         }
-
-        // Selection is always available: a shape, a handle, or a sheet border wins over the tool.
-        if (trySelectionPress(sx, sy, world)) {
-            return;
-        }
-
-        // Empty space. Draw only with a tool over a sheet body; otherwise deselect and pan
-        // (there is nothing to draw on off-sheet).
-        if (activeTool != null && sheetUnderCursor(world, sx, sy) != null) {
-            beginTool(e);
+        Sheet owner = sheetUnderCursor(world, sx, sy);
+        if (owner != null) {
+            int handle = SheetHandles.hit(owner, viewport, sx, sy);
+            document.selectSheet(owner);
+            if (handle >= 0) {
+                manipulator.beginTransform(owner, handle, world);
+            } else {
+                manipulator.beginMove(owner, world); // grab anywhere on the sheet to move it
+            }
+            mode = Mode.SHEET;
             return;
         }
         document.clearSelection();
         beginPan(sx, sy);
     }
 
-    /** Right-click selects the object under the cursor and opens the inspector popup on it. */
-    private void onRightClick(MouseEvent e) {
-        Vec2 world = worldOf(e.getX(), e.getY());
-        Sheet owner = sheetUnderCursor(world, e.getX(), e.getY());
-        if (owner == null) {
-            document.clearSelection();
+    /** Edition mode: only sheet content is interactive (draw, select/move/edit elements). */
+    private void pressEdition(double sx, double sy, Vec2 world, MouseEvent e) {
+        if (activeTool != null && (activeTool.inProgress() || activeTool.overridesSelection())) {
+            beginTool(e);
             return;
         }
-        Element shape = topmostElementIn(owner, world);
-        if (shape != null) {
-            document.selectElement(owner, shape);
-        } else {
-            document.selectSheet(owner);
+        if (e.getClickCount() == 2
+                && document.selectedElement() instanceof EditablePolygon poly
+                && document.selectedSheet() != null
+                && subdivideEdge(poly, document.selectedSheet(), world)) {
+            return;
         }
-        inspector.showFor(this, e.getScreenX(), e.getScreenY());
+        Element selEl = document.selectedElement();
+        Sheet selSheet = document.selectedSheet();
+        if (selEl != null && selSheet != null) {
+            ElementHandles.Hit h = ElementHandles.hitTest(selEl, selSheet, viewport, sx, sy);
+            if (h != null) {
+                elementEditor.begin(selEl, selSheet, h, SheetGeometry.worldToLocal(selSheet, world));
+                mode = Mode.ELEMENT_EDIT;
+                return;
+            }
+        }
+        Sheet owner = topmostAt(world);
+        if (owner != null) {
+            Element shape = topmostElementIn(owner, world);
+            if (shape != null) {
+                document.selectElement(owner, shape);
+                beginElementMove(owner, shape, world);
+                return;
+            }
+            if (activeTool != null) {
+                beginTool(e); // draw on the empty sheet body
+                return;
+            }
+        }
+        document.clearSelection();
+        beginPan(sx, sy);
+    }
+
+    /** Right-click opens the inspector: a shape's style in edition, a sheet's name + layers. */
+    private void onRightClick(MouseEvent e) {
+        Vec2 world = worldOf(e.getX(), e.getY());
+        if (document.editorMode() == EditorMode.EDITION) {
+            Sheet owner = topmostAt(world);
+            if (owner != null) {
+                Element shape = topmostElementIn(owner, world);
+                if (shape != null) {
+                    document.selectElement(owner, shape);
+                    inspector.showFor(this, e.getScreenX(), e.getScreenY());
+                    return;
+                }
+            }
+        }
+        Sheet sheet = sheetUnderCursor(world, e.getX(), e.getY());
+        if (sheet != null) {
+            document.selectSheet(sheet);
+            inspector.showFor(this, e.getScreenX(), e.getScreenY());
+        } else {
+            document.clearSelection();
+        }
     }
 
     private void beginTool(MouseEvent e) {
         activeTool.onPress(this, pointer(e));
         mode = Mode.TOOL;
         requestRender();
-    }
-
-    /**
-     * Attempt a selection/edit gesture, in priority order: the selected object's edit handles,
-     * then (on the topmost sheet under the cursor) a shape, then that sheet's border band to grab
-     * the sheet. The empty interior body is not a selection. Returns true if a gesture started.
-     */
-    private boolean trySelectionPress(double sx, double sy, Vec2 world) {
-        Sheet selSheet = document.selectedSheet();
-        Element selEl = document.selectedElement();
-
-        // 1. Edit handles of the selected element (vertex / edge / radius).
-        if (selEl != null && selSheet != null) {
-            ElementHandles.Hit h = ElementHandles.hitTest(selEl, selSheet, viewport, sx, sy);
-            if (h != null) {
-                elementEditor.begin(selEl, selSheet, h, SheetGeometry.worldToLocal(selSheet, world));
-                mode = Mode.ELEMENT_EDIT;
-                return true;
-            }
-        }
-
-        Sheet owner = sheetUnderCursor(world, sx, sy);
-
-        // 2. Sheet transform handles (selected sheet first, then the hovered/owner sheet).
-        Sheet handleSheet = (selEl == null) ? selSheet : null;
-        int handle = (handleSheet != null) ? SheetHandles.hit(handleSheet, viewport, sx, sy) : -1;
-        if (handle < 0 && owner != null && owner != handleSheet) {
-            handle = SheetHandles.hit(owner, viewport, sx, sy);
-            if (handle >= 0) {
-                handleSheet = owner;
-            }
-        }
-        if (handle >= 0) {
-            document.selectSheet(handleSheet);
-            manipulator.beginTransform(handleSheet, handle, world);
-            mode = Mode.SHEET;
-            return true;
-        }
-
-        if (owner == null) {
-            return false;
-        }
-
-        // 3. A shape in the owner sheet's body.
-        Element shape = topmostElementIn(owner, world);
-        if (shape != null) {
-            document.selectElement(owner, shape);
-            beginElementMove(owner, shape, world);
-            return true;
-        }
-
-        // 4. The owner sheet's border band grabs the sheet.
-        if (SheetHandles.borderDistance(owner, viewport, sx, sy) <= BORDER_BAND) {
-            document.selectSheet(owner);
-            manipulator.beginMove(owner, world);
-            mode = Mode.SHEET;
-            return true;
-        }
-        return false;
     }
 
     /** Topmost sheet whose body or border band is under the cursor, or {@code null}. */
@@ -469,21 +461,19 @@ public final class CanvasView extends StackPane implements CanvasContext {
         updateHover(e.getX(), e.getY());
     }
 
-    /** Reveal the hovered sheet's handles and reflect grab/draw affordance in the cursor. */
+    /** Reflect the mode's grab/draw affordance in the cursor and hover highlight. */
     private void updateHover(double sx, double sy) {
         Vec2 world = worldOf(sx, sy);
-        Sheet owner = sheetUnderCursor(world, sx, sy);
-        document.setHoveredSheet(owner); // repaints only when the hovered sheet changes
-
-        boolean onShape = owner != null && topmostElementIn(owner, world) != null;
-        boolean onBorder = owner != null && !onShape
-                && SheetHandles.borderDistance(owner, viewport, sx, sy) <= BORDER_BAND;
-        if (onBorder) {
-            setCursor(Cursor.MOVE);
-        } else if (owner != null && !onShape && activeTool != null) {
-            setCursor(Cursor.CROSSHAIR); // empty body with a drawing tool → will draw
+        if (document.editorMode() == EditorMode.ASSEMBLY) {
+            Sheet owner = sheetUnderCursor(world, sx, sy);
+            document.setHoveredSheet(owner); // reveal grab handles on hover
+            setCursor(owner != null ? Cursor.MOVE : Cursor.DEFAULT);
         } else {
-            setCursor(Cursor.DEFAULT);
+            document.setHoveredSheet(null); // sheets aren't grabbable in edition
+            Sheet owner = topmostAt(world);
+            boolean onShape = owner != null && topmostElementIn(owner, world) != null;
+            setCursor(owner != null && !onShape && activeTool != null
+                    ? Cursor.CROSSHAIR : Cursor.DEFAULT);
         }
     }
 

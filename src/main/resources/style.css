@@ -44,6 +44,11 @@
     -fx-text-fill: -accent;
 }
 
+.mode-segment {
+    -fx-spacing: 4;
+    -fx-padding: 0 0 2 0;
+}
+
 .tool-icon {
     -fx-fill: transparent;
     -fx-stroke: #44474d;

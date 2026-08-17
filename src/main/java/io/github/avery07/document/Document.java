@@ -31,8 +31,23 @@ public final class Document {
     private Element selectedElement;
     private Sheet hoveredSheet;   // transient UI hover, not part of the document
     private Style currentStyle = Style.DEFAULT; // style applied to newly drawn shapes
+    private EditorMode editorMode = EditorMode.ASSEMBLY;
     private Path file;      // null until first save
     private boolean dirty;
+
+    public EditorMode editorMode() {
+        return editorMode;
+    }
+
+    /** Switch interaction mode; clears the selection so nothing stale carries across modes. */
+    public void setEditorMode(EditorMode mode) {
+        if (this.editorMode != mode) {
+            this.editorMode = mode;
+            selectedSheet = null;
+            selectedElement = null;
+            fireChanged();
+        }
+    }
 
     public Style currentStyle() {
         return currentStyle;

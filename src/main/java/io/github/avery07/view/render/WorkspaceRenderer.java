@@ -1,6 +1,7 @@
 package io.github.avery07.view.render;
 
 import io.github.avery07.document.Document;
+import io.github.avery07.document.EditorMode;
 import io.github.avery07.geometry.Vec2;
 import io.github.avery07.model.Layer;
 import io.github.avery07.model.Sheet;
@@ -68,21 +69,23 @@ public final class WorkspaceRenderer {
         g.clearRect(0, 0, w, h);
 
         Sheet selectedSheet = document.selectedSheet();
-        Sheet hovered = document.hoveredSheet();
-        // Hover affordance: reveal a non-selected sheet's handles so its grab points are visible.
-        if (hovered != null && hovered != selectedSheet) {
-            drawSheetHandles(g, hovered);
-        }
-
-        Element el = document.selectedElement();
-        if (el != null && selectedSheet != null) {
-            drawElementHighlight(g, selectedSheet, el);
-            drawElementHandles(g, selectedSheet, el);
-            return;
-        }
-        if (selectedSheet != null) {
-            drawSheetOutline(g, selectedSheet);
-            drawSheetHandles(g, selectedSheet);
+        if (document.editorMode() == EditorMode.ASSEMBLY) {
+            // Sheets are the interactive objects: show selection + hover grab handles.
+            Sheet hovered = document.hoveredSheet();
+            if (hovered != null && hovered != selectedSheet) {
+                drawSheetHandles(g, hovered);
+            }
+            if (selectedSheet != null) {
+                drawSheetOutline(g, selectedSheet);
+                drawSheetHandles(g, selectedSheet);
+            }
+        } else {
+            // Edition: only the selected element's highlight + edit handles.
+            Element el = document.selectedElement();
+            if (el != null && selectedSheet != null) {
+                drawElementHighlight(g, selectedSheet, el);
+                drawElementHandles(g, selectedSheet, el);
+            }
         }
     }
 

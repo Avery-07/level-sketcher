@@ -1,6 +1,7 @@
 package io.github.avery07.app;
 
 import io.github.avery07.document.Document;
+import io.github.avery07.document.EditorMode;
 import io.github.avery07.model.Style;
 import io.github.avery07.ui.Colors;
 import io.github.avery07.ui.Icons;
@@ -10,6 +11,7 @@ import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBase;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.Label;
@@ -33,14 +35,15 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * The JavaFX application shell: a top menu bar (File/Edit/Systems), a left two-column tool
- * palette (sheet actions | drawing tools), and the canvas. Owns the top-level {@link Document},
- * applies the stylesheet, and wires tool keyboard shortcuts. Object properties and a sheet's
- * layers are reached by right-clicking (see {@code InspectorPopup}).
+ * The JavaFX application shell: a top menu bar, a left tool palette (mode toggle + sheet
+ * actions | drawing tools), and the canvas. Owns the {@link Document}, applies the stylesheet,
+ * wires tool + mode keyboard shortcuts, and enables/disables palette items per interaction mode.
  */
 public final class App extends Application {
 
@@ -51,8 +54,13 @@ public final class App extends Application {
     private final ToggleGroup toolGroup = new ToggleGroup();
     private final Map<KeyCode, ToggleButton> toolKeys = new HashMap<>();
     private final Map<KeyCode, Runnable> toolActivations = new HashMap<>();
+    private final List<ButtonBase> drawButtons = new ArrayList<>();
 
     private CanvasView canvas;
+    private ToggleButton assemblyBtn;
+    private ToggleButton editionBtn;
+    private ButtonBase addSheetButton;
+    private MenuItem newSheetItem;
 
     @Override
     public void start(Stage stage) {
@@ -70,6 +78,9 @@ public final class App extends Application {
         }
         installShortcuts(scene);
 
+        document.addChangeListener(this::syncModeUi);
+        syncModeUi();
+
         stage.setScene(scene);
         stage.setTitle(titleFor(document));
         document.addChangeListener(() -> stage.setTitle(titleFor(document)));
@@ -79,18 +90,14 @@ public final class App extends Application {
     }
 
     private MenuBar buildMenuBar() {
+        newSheetItem = menuItem("New Sheet", canvas::addSheetAtCenter);
         Menu file = new Menu("File");
-        file.getItems().addAll(
-                menuItem("New Sheet", canvas::addSheetAtCenter),
-                new SeparatorMenuItem(),
+        file.getItems().addAll(newSheetItem, new SeparatorMenuItem(),
                 disabled("Open…"), disabled("Save"), disabled("Save As…"), disabled("Export…"));
 
         Menu edit = new Menu("Edit");
-        edit.getItems().addAll(
-                menuItem("Undo", canvas::undo),
-                menuItem("Redo", canvas::redo),
-                new SeparatorMenuItem(),
-                menuItem("Delete", canvas::deleteSelected));
+        edit.getItems().addAll(menuItem("Undo", canvas::undo), menuItem("Redo", canvas::redo),
+                new SeparatorMenuItem(), menuItem("Delete", canvas::deleteSelected));
 
         Menu systems = new Menu("Systems");
         systems.getItems().add(disabled("Symbol Library… (coming soon)"));
@@ -99,8 +106,34 @@ public final class App extends Application {
     }
 
     private VBox buildToolPalette() {
-        VBox sheetColumn = new VBox(4,
-                actionButton(Icons.addSheet(), "Add a sheet", canvas::addSheetAtCenter),
+        VBox palette = new VBox(10, buildModeToggle(), buildToolColumns(), grow(), buildStyleControls());
+        palette.getStyleClass().add("tool-palette");
+        palette.setPadding(new Insets(8));
+        return palette;
+    }
+
+    private Node buildModeToggle() {
+        ToggleGroup modeGroup = new ToggleGroup();
+        assemblyBtn = new ToggleButton("Assembly");
+        editionBtn = new ToggleButton("Edition");
+        assemblyBtn.setToggleGroup(modeGroup);
+        editionBtn.setToggleGroup(modeGroup);
+        assemblyBtn.setMaxWidth(Double.MAX_VALUE);
+        editionBtn.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(assemblyBtn, Priority.ALWAYS);
+        HBox.setHgrow(editionBtn, Priority.ALWAYS);
+        assemblyBtn.setTooltip(new Tooltip("Arrange sheets (Tab)"));
+        editionBtn.setTooltip(new Tooltip("Draw on sheets (Tab)"));
+        assemblyBtn.setOnAction(e -> setMode(EditorMode.ASSEMBLY));
+        editionBtn.setOnAction(e -> setMode(EditorMode.EDITION));
+        HBox segment = new HBox(assemblyBtn, editionBtn);
+        segment.getStyleClass().add("mode-segment");
+        return segment;
+    }
+
+    private Node buildToolColumns() {
+        addSheetButton = actionButton(Icons.addSheet(), "Add a sheet", canvas::addSheetAtCenter);
+        VBox sheetColumn = new VBox(4, addSheetButton,
                 actionButton(Icons.trash(), "Delete selection (Del)", canvas::deleteSelected));
 
         VBox drawColumn = new VBox(4,
@@ -110,15 +143,7 @@ public final class App extends Application {
                 toolButton(Icons.freehand(), "Freehand", "D", KeyCode.D, canvas::useFreehandTool),
                 toolButton(Icons.eraser(), "Erase", "E", KeyCode.E, canvas::useEraserTool));
 
-        HBox columns = new HBox(4, sheetColumn, drawColumn);
-
-        Region spacer = new Region();
-        VBox.setVgrow(spacer, Priority.ALWAYS);
-
-        VBox palette = new VBox(10, columns, spacer, buildStyleControls());
-        palette.getStyleClass().add("tool-palette");
-        palette.setPadding(new Insets(8));
-        return palette;
+        return new HBox(4, sheetColumn, drawColumn);
     }
 
     /** The "current draw style" controls: what newly drawn shapes inherit. */
@@ -164,6 +189,7 @@ public final class App extends Application {
         });
         toolKeys.put(key, button);
         toolActivations.put(key, activate);
+        drawButtons.add(button);
         return button;
     }
 
@@ -176,22 +202,41 @@ public final class App extends Application {
         return button;
     }
 
-    private MenuItem menuItem(String text, Runnable action) {
-        MenuItem item = new MenuItem(text);
-        item.setOnAction(e -> action.run());
-        return item;
+    private void setMode(EditorMode mode) {
+        if (mode == EditorMode.ASSEMBLY) {
+            toolGroup.selectToggle(null);
+            canvas.clearTool();
+        }
+        document.setEditorMode(mode);
+        syncModeUi();
     }
 
-    private MenuItem disabled(String text) {
-        MenuItem item = new MenuItem(text);
-        item.setDisable(true);
-        return item;
+    /** Reflect the current mode in the toggle + which palette items are enabled. */
+    private void syncModeUi() {
+        boolean assembly = document.editorMode() == EditorMode.ASSEMBLY;
+        assemblyBtn.setSelected(assembly);
+        editionBtn.setSelected(!assembly);
+        drawButtons.forEach(b -> b.setDisable(assembly));
+        addSheetButton.setDisable(!assembly);
+        newSheetItem.setDisable(!assembly);
     }
 
     private void installShortcuts(Scene scene) {
         scene.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
-            if (scene.getFocusOwner() instanceof TextInputControl || e.isShortcutDown()) {
-                return; // don't hijack typing or Ctrl/Cmd combos
+            if (scene.getFocusOwner() instanceof TextInputControl) {
+                return; // don't hijack typing (incl. Tab traversal in fields)
+            }
+            if (e.getCode() == KeyCode.TAB) {
+                setMode(document.editorMode() == EditorMode.ASSEMBLY
+                        ? EditorMode.EDITION : EditorMode.ASSEMBLY);
+                e.consume();
+                return;
+            }
+            if (e.isShortcutDown()) {
+                return; // leave Ctrl/Cmd combos to the canvas
+            }
+            if (document.editorMode() != EditorMode.EDITION) {
+                return; // tool shortcuts only apply while editing
             }
             if (e.getCode() == KeyCode.V) {
                 toolGroup.selectToggle(null);
@@ -208,6 +253,24 @@ public final class App extends Application {
                 e.consume();
             }
         });
+    }
+
+    private MenuItem menuItem(String text, Runnable action) {
+        MenuItem item = new MenuItem(text);
+        item.setOnAction(e -> action.run());
+        return item;
+    }
+
+    private MenuItem disabled(String text) {
+        MenuItem item = new MenuItem(text);
+        item.setDisable(true);
+        return item;
+    }
+
+    private Region grow() {
+        Region spacer = new Region();
+        VBox.setVgrow(spacer, Priority.ALWAYS);
+        return spacer;
     }
 
     /** Window title with the unsaved-changes indicator (spec §7.9). */
