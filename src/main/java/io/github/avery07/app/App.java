@@ -106,11 +106,12 @@ public final class App extends Application {
         MenuItem open = menuItem("Open…", "Shortcut+O", this::openFile);
         MenuItem save = menuItem("Save", "Shortcut+S", this::saveFile);
         MenuItem saveAs = menuItem("Save As…", "Shortcut+Shift+S", this::saveFileAs);
+        MenuItem importImg = menuItem("Import Image…", null, this::importImage);
         MenuItem exportPng = menuItem("Export Image (PNG)…", null, this::exportImage);
         MenuItem exportSvg = menuItem("Export SVG…", null, this::exportSvg);
         MenuItem exportJson = menuItem("Export JSON…", null, this::exportJson);
         file.getItems().addAll(open, save, saveAs, new SeparatorMenuItem(),
-                exportPng, exportSvg, exportJson);
+                importImg, new SeparatorMenuItem(), exportPng, exportSvg, exportJson);
 
         Menu systems = new Menu("Systems");
         for (io.github.avery07.model.symbol.SymbolType type : document.symbolLibrary().types()) {
@@ -155,6 +156,7 @@ public final class App extends Application {
                 toolButton(Icons.circle(), "Circle", "O", KeyCode.O, canvas::useCircleTool),
                 toolButton(Icons.polygon(), "Polygon", "P", KeyCode.P, canvas::usePolygonTool),
                 toolButton(Icons.freehand(), "Freehand", "D", KeyCode.D, canvas::useFreehandTool),
+                toolButton(Icons.text(), "Text", "T", KeyCode.T, canvas::useTextTool),
                 toolButton(Icons.eraser(), "Erase", "E", KeyCode.E, canvas::useEraserTool));
 
         sheetColumn.setMaxWidth(Double.MAX_VALUE);
@@ -397,6 +399,36 @@ public final class App extends Application {
             ProjectIo.save(document, file.toPath()); // structured export; doesn't change the current file
         } catch (IOException ex) {
             error("Could not export the JSON", ex);
+        }
+    }
+
+    private void importImage() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Import Image");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(
+                "Images", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp"));
+        File file = chooser.showOpenDialog(stage);
+        if (file == null) {
+            return;
+        }
+        try {
+            byte[] data = java.nio.file.Files.readAllBytes(file.toPath());
+            javafx.scene.image.Image img = new javafx.scene.image.Image(new java.io.ByteArrayInputStream(data));
+            if (img.isError()) {
+                error("Could not read the image", img.getException());
+                return;
+            }
+            String n = file.getName().toLowerCase();
+            String format = n.endsWith(".jpg") || n.endsWith(".jpeg") ? "jpg"
+                    : n.endsWith(".gif") ? "gif" : n.endsWith(".bmp") ? "bmp" : "png";
+            if (!canvas.importImage(data, format, img.getWidth(), img.getHeight())) {
+                Alert alert = new Alert(Alert.AlertType.INFORMATION,
+                        "Add a sheet first, then import an image onto it.");
+                alert.setHeaderText(null);
+                alert.showAndWait();
+            }
+        } catch (IOException ex) {
+            error("Could not import the image", ex);
         }
     }
 

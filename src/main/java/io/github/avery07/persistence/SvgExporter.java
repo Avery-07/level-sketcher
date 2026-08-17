@@ -9,8 +9,11 @@ import io.github.avery07.model.element.Circle;
 import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.Element;
 import io.github.avery07.model.element.FreehandStroke;
+import io.github.avery07.model.element.ImageElement;
 import io.github.avery07.model.element.SymbolInstance;
+import io.github.avery07.model.element.TextElement;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 
@@ -83,7 +86,36 @@ public final class SvgExporter {
             case FreehandStroke fr -> out.append(polyline(worldPoints(s, fr.points(), b),
                     style.stroke(), style.strokeWidth()));
             case SymbolInstance sym -> symbol(out, b, s, sym);
+            case TextElement t -> {
+                Vec2 a = world(s, t.anchor().x(), t.anchor().y());
+                b.record(a);
+                out.append(String.format(Locale.ROOT,
+                        "  <text x=\"%s\" y=\"%s\" font-family=\"sans-serif\" font-size=\"%s\" fill=\"%s\">%s</text>%n",
+                        f(a.x()), f(a.y()), f(t.fontSize() * s.scale()), t.style().stroke(), escape(t.content())));
+            }
+            case ImageElement img -> {
+                double x = img.topLeft().x(), y = img.topLeft().y(), w = img.width(), h = img.height();
+                b.record(world(s, x, y));
+                b.record(world(s, x + w, y));
+                b.record(world(s, x + w, y + h));
+                b.record(world(s, x, y + h));
+                String mime = "image/" + (img.format().equals("jpg") ? "jpeg" : img.format());
+                out.append(String.format(Locale.ROOT,
+                        "  <image transform=\"%s\" x=\"%s\" y=\"%s\" width=\"%s\" height=\"%s\" href=\"data:%s;base64,%s\"/>%n",
+                        sheetMatrix(s), f(x), f(y), f(w), f(h), mime,
+                        Base64.getEncoder().encodeToString(img.data())));
+            }
         }
+    }
+
+    /** SVG matrix for a sheet's local→world transform, so an axis-aligned shape renders placed. */
+    private static String sheetMatrix(Sheet s) {
+        double sc = s.scale(), cos = Math.cos(s.rotation()), sin = Math.sin(s.rotation());
+        double a = sc * cos, b = sc * sin, c = -sc * sin, d = sc * cos;
+        double fcx = s.frameCenterX(), fcy = s.frameCenterY();
+        double tx = s.center().x() - (a * fcx + c * fcy);
+        double ty = s.center().y() - (b * fcx + d * fcy);
+        return String.format(Locale.ROOT, "matrix(%s %s %s %s %s %s)", f(a), f(b), f(c), f(d), f(tx), f(ty));
     }
 
     private static void symbol(StringBuilder out, Bounds b, Sheet s, SymbolInstance sym) {

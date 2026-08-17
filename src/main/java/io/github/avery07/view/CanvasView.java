@@ -11,6 +11,7 @@ import io.github.avery07.command.RenameSheetCommand;
 import io.github.avery07.command.SetPolygonVerticesCommand;
 import io.github.avery07.command.SetSheetStateCommand;
 import io.github.avery07.command.SetSymbolAnchorsCommand;
+import io.github.avery07.command.SetTextCommand;
 import io.github.avery07.document.Document;
 import io.github.avery07.document.EditorMode;
 import io.github.avery07.geometry.Hit;
@@ -19,6 +20,7 @@ import io.github.avery07.model.Sheet;
 import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.Element;
 import io.github.avery07.model.element.SymbolInstance;
+import io.github.avery07.model.element.TextElement;
 import io.github.avery07.tool.CanvasContext;
 import io.github.avery07.tool.CircleTool;
 import io.github.avery07.tool.EraserTool;
@@ -77,7 +79,13 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private final Canvas content = new Canvas();
     private final Canvas overlay = new Canvas();
     private final TextField nameEditor = new TextField();
+    private final TextField textEditor = new TextField();
     private final Text measurer = new Text();
+
+    private TextElement editingText;
+    private Sheet editingTextSheet;
+    private String editingTextBefore;
+    private double editingTextBeforeSize;
 
     private Tool activeTool; // null = select mode
     private Mode mode = Mode.NONE;
@@ -114,7 +122,8 @@ public final class CanvasView extends StackPane implements CanvasContext {
         content.setMouseTransparent(true);
         overlay.setMouseTransparent(true);
         configureNameEditor();
-        getChildren().addAll(content, overlay, nameEditor);
+        configureTextEditor();
+        getChildren().addAll(content, overlay, nameEditor, textEditor);
 
         setFocusTraversable(true);
         widthProperty().addListener((o, ov, nv) -> resizeCanvases());
@@ -159,6 +168,39 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     public void useSymbolTool(io.github.avery07.model.symbol.SymbolType type) {
         setActiveTool(new io.github.avery07.tool.SymbolTool(type));
+    }
+
+    public void useTextTool() {
+        setActiveTool(new io.github.avery07.tool.TextTool());
+    }
+
+    /**
+     * Place an imported image (embedded bytes) on a target sheet, sized to fit, and switch to
+     * Edition to edit it. Returns false if there is no sheet to place it on.
+     */
+    public boolean importImage(byte[] data, String format, double naturalW, double naturalH) {
+        Sheet target = document.selectedSheet();
+        if (target == null) {
+            target = topmostAt(viewport.toWorld(new Vec2(getWidth() / 2, getHeight() / 2)));
+        }
+        if (target == null && !document.workspace().sheets().isEmpty()) {
+            target = document.workspace().sheets().get(document.workspace().sheets().size() - 1);
+        }
+        if (target == null) {
+            return false;
+        }
+        double w = naturalW > 0 ? naturalW : 200;
+        double h = naturalH > 0 ? naturalH : 200;
+        double fit = Math.min(1, Math.min(target.width() * 0.8 / w, target.height() * 0.8 / h));
+        w *= fit;
+        h *= fit;
+        Vec2 tl = new Vec2(target.frameCenterX() - w / 2, target.frameCenterY() - h / 2);
+        var image = new io.github.avery07.model.element.ImageElement(tl, w, h, data, format);
+        document.setEditorMode(EditorMode.EDITION); // images are content
+        execute(new AddElementCommand(target, image));
+        document.selectElement(target, image);
+        requestFocus();
+        return true;
     }
 
     private void setActiveTool(Tool tool) {
@@ -408,6 +450,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private void onPress(MouseEvent e) {
         requestFocus();
         commitRename();
+        commitTextEdit();
         inspector.hide(); // any press on the canvas dismisses the inspector popup
 
         double sx = e.getX(), sy = e.getY();
@@ -521,10 +564,15 @@ public final class CanvasView extends StackPane implements CanvasContext {
             beginTool(e);
             return;
         }
-        if (e.getClickCount() == 2 && document.selectedElement() != null
-                && document.selectedSheet() != null
-                && subdivideEdge(document.selectedElement(), document.selectedSheet(), world)) {
-            return;
+        if (e.getClickCount() == 2 && document.selectedSheet() != null) {
+            if (document.selectedElement() instanceof TextElement t) {
+                startTextEdit(document.selectedSheet(), t);
+                return;
+            }
+            if (document.selectedElement() != null
+                    && subdivideEdge(document.selectedElement(), document.selectedSheet(), world)) {
+                return;
+            }
         }
         Element selEl = document.selectedElement();
         Sheet selSheet = document.selectedSheet();
@@ -923,6 +971,80 @@ public final class CanvasView extends StackPane implements CanvasContext {
     }
 
     // ----- rename editor -----
+
+    // ----- inline text editor -----
+
+    @Override
+    public void requestTextEdit(Sheet sheet, TextElement text) {
+        startTextEdit(sheet, text);
+    }
+
+    private void configureTextEditor() {
+        textEditor.setVisible(false);
+        textEditor.setManaged(false);
+        textEditor.setOnAction(e -> commitTextEdit());
+        textEditor.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == KeyCode.ESCAPE) {
+                cancelTextEdit();
+                e.consume();
+            }
+        });
+        textEditor.focusedProperty().addListener((o, was, is) -> {
+            if (!is) {
+                commitTextEdit();
+            }
+        });
+        textEditor.textProperty().addListener((o, ov, nv) -> {
+            if (editingText != null) {
+                editingText.setContent(nv); // live preview
+                requestRender();
+            }
+        });
+    }
+
+    private void startTextEdit(Sheet sheet, TextElement text) {
+        editingText = text;
+        editingTextSheet = sheet;
+        editingTextBefore = text.content();
+        editingTextBeforeSize = text.fontSize();
+        double fontPx = Math.max(11, text.fontSize() * sheet.scale() * viewport.zoom());
+        Vec2 tl = viewport.toScreen(SheetGeometry.localToWorld(
+                sheet, text.anchor().x(), text.anchor().y() - text.fontSize() * 0.85));
+        textEditor.setFont(javafx.scene.text.Font.font(fontPx));
+        textEditor.setText(text.content());
+        textEditor.resizeRelocate(tl.x(), tl.y(), Math.max(140, fontPx * 8), fontPx * 1.6);
+        textEditor.setVisible(true);
+        textEditor.requestFocus();
+        textEditor.selectAll();
+    }
+
+    private void commitTextEdit() {
+        if (editingText == null) {
+            return;
+        }
+        TextElement t = editingText;
+        editingText = null;
+        textEditor.setVisible(false);
+        String content = textEditor.getText();
+        t.setContent(content);
+        if (!content.equals(editingTextBefore)) {
+            execute(new SetTextCommand(t, editingTextBefore, editingTextBeforeSize, content, t.fontSize()));
+        } else {
+            document.notifyChanged();
+        }
+        requestFocus();
+    }
+
+    private void cancelTextEdit() {
+        if (editingText == null) {
+            return;
+        }
+        editingText.setContent(editingTextBefore);
+        editingText = null;
+        textEditor.setVisible(false);
+        document.notifyChanged();
+        requestFocus();
+    }
 
     private void configureNameEditor() {
         nameEditor.setVisible(false);

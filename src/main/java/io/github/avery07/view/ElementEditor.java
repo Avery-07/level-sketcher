@@ -1,6 +1,7 @@
 package io.github.avery07.view;
 
 import io.github.avery07.command.Command;
+import io.github.avery07.command.SetImageRectCommand;
 import io.github.avery07.command.SetPolygonVerticesCommand;
 import io.github.avery07.command.SetRadiusCommand;
 import io.github.avery07.command.SetSymbolAnchorsCommand;
@@ -10,6 +11,7 @@ import io.github.avery07.model.Sheet;
 import io.github.avery07.model.element.Circle;
 import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.Element;
+import io.github.avery07.model.element.ImageElement;
 import io.github.avery07.model.element.SymbolInstance;
 
 import java.util.ArrayList;
@@ -36,6 +38,8 @@ final class ElementEditor {
     private List<Vec2> pointsBefore;             // vertex/edge (polygon vertices or symbol anchors)
     private double radiusBefore;                 // circle radius
     private Map<String, Double> paramsBefore;    // cone direction/fov
+    private Vec2 imageBeforeTopLeft, imageFixedCorner; // image corner resize
+    private double imageBeforeW, imageBeforeH;
 
     boolean active() {
         return element != null;
@@ -58,6 +62,14 @@ final class ElementEditor {
             }
             case RADIUS -> radiusBefore = ((Circle) e).radius();
             case CONE_DIR, CONE_FOV -> paramsBefore = ((SymbolInstance) e).copyParams();
+            case IMAGE_CORNER -> {
+                ImageElement img = (ImageElement) e;
+                imageBeforeTopLeft = img.topLeft();
+                imageBeforeW = img.width();
+                imageBeforeH = img.height();
+                double[] f = imageCorner((index + 2) % 4, img);
+                imageFixedCorner = new Vec2(f[0], f[1]);
+            }
         }
     }
 
@@ -89,6 +101,13 @@ final class ElementEditor {
                 double drag = Math.atan2(currentLocal.y() - a.y(), currentLocal.x() - a.x());
                 double diff = Math.atan2(Math.sin(drag - facing), Math.cos(drag - facing));
                 sym.params().put("fov", Math.min(180, Math.max(5, 2 * Math.toDegrees(Math.abs(diff)))));
+            }
+            case IMAGE_CORNER -> {
+                ImageElement img = (ImageElement) element;
+                img.setTopLeft(new Vec2(Math.min(imageFixedCorner.x(), currentLocal.x()),
+                        Math.min(imageFixedCorner.y(), currentLocal.y())));
+                img.setWidth(Math.max(1, Math.abs(currentLocal.x() - imageFixedCorner.x())));
+                img.setHeight(Math.max(1, Math.abs(currentLocal.y() - imageFixedCorner.y())));
             }
         }
         lastLocal = currentLocal;
@@ -137,6 +156,13 @@ final class ElementEditor {
                 Map<String, Double> after = s.copyParams();
                 yield after.equals(paramsBefore) ? null : new SetSymbolParamsCommand(s, paramsBefore, after);
             }
+            case IMAGE_CORNER -> {
+                ImageElement img = (ImageElement) element;
+                boolean unchanged = img.topLeft().equals(imageBeforeTopLeft)
+                        && img.width() == imageBeforeW && img.height() == imageBeforeH;
+                yield unchanged ? null : new SetImageRectCommand(img, imageBeforeTopLeft,
+                        imageBeforeW, imageBeforeH, img.topLeft(), img.width(), img.height());
+            }
         };
     }
 
@@ -165,4 +191,15 @@ final class ElementEditor {
     private static double normalize360(double deg) {
         return ((deg % 360) + 360) % 360;
     }
+
+    private static double[] imageCorner(int i, ImageElement img) {
+        double x = img.topLeft().x(), y = img.topLeft().y(), w = img.width(), h = img.height();
+        return switch (i) {
+            case 0 -> new double[]{x, y};
+            case 1 -> new double[]{x + w, y};
+            case 2 -> new double[]{x + w, y + h};
+            default -> new double[]{x, y + h};
+        };
+    }
 }
+

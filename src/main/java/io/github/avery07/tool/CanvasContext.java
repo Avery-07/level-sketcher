@@ -5,6 +5,7 @@ import io.github.avery07.document.Document;
 import io.github.avery07.geometry.Vec2;
 import io.github.avery07.model.Sheet;
 import io.github.avery07.model.Style;
+import io.github.avery07.model.element.TextElement;
 
 /**
  * The services a {@link Tool} needs from the canvas, without depending on the view layer.
@@ -41,4 +42,7 @@ public interface CanvasContext {
 
     /** Request a repaint. */
     void requestRender();
+
+    /** Open the inline editor to type a text element's content (used right after placing it). */
+    void requestTextEdit(Sheet sheet, TextElement text);
 }

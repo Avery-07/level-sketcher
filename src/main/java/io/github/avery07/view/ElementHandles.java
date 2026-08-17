@@ -6,7 +6,9 @@ import io.github.avery07.model.element.Circle;
 import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.Element;
 import io.github.avery07.model.element.FreehandStroke;
+import io.github.avery07.model.element.ImageElement;
 import io.github.avery07.model.element.SymbolInstance;
+import io.github.avery07.model.element.TextElement;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,7 +20,7 @@ import java.util.List;
  */
 public final class ElementHandles {
 
-    public enum Kind { VERTEX, EDGE, RADIUS, CONE_DIR, CONE_FOV }
+    public enum Kind { VERTEX, EDGE, RADIUS, CONE_DIR, CONE_FOV, IMAGE_CORNER }
 
     public record Hit(Kind kind, int index) {
     }
@@ -52,6 +54,14 @@ public final class ElementHandles {
                     screen(s, new Vec2(c.center().x() + c.radius(), c.center().y()), vp)));
             case FreehandStroke f -> { }
             case SymbolInstance sym -> symbolHandles(out, sym, s, vp);
+            case TextElement t -> { } // text moves as a whole; size is edited in the inspector
+            case ImageElement img -> {
+                double x = img.topLeft().x(), y = img.topLeft().y(), w = img.width(), h = img.height();
+                out.add(new Handle(Kind.IMAGE_CORNER, 0, screen(s, new Vec2(x, y), vp)));
+                out.add(new Handle(Kind.IMAGE_CORNER, 1, screen(s, new Vec2(x + w, y), vp)));
+                out.add(new Handle(Kind.IMAGE_CORNER, 2, screen(s, new Vec2(x + w, y + h), vp)));
+                out.add(new Handle(Kind.IMAGE_CORNER, 3, screen(s, new Vec2(x, y + h), vp)));
+            }
         }
         return out;
     }

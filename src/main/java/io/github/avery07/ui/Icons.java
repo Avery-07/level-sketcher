@@ -43,6 +43,12 @@ public final class Icons {
         return styled(p);
     }
 
+    public static Node text() {
+        SVGPath p = new SVGPath();
+        p.setContent("M3,4 L15,4 M9,4 L9,15"); // a "T"
+        return styled(p);
+    }
+
     public static Node addSheet() {
         SVGPath p = new SVGPath();
         // A sheet outline with a plus in the middle.

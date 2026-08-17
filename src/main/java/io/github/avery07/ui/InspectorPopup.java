@@ -2,8 +2,10 @@ package io.github.avery07.ui;
 
 import io.github.avery07.command.RenameSheetCommand;
 import io.github.avery07.command.RenameSymbolCommand;
+import io.github.avery07.command.SetImageRectCommand;
 import io.github.avery07.command.SetStyleCommand;
 import io.github.avery07.command.SetSymbolParamsCommand;
+import io.github.avery07.command.SetTextCommand;
 import io.github.avery07.document.Document;
 import io.github.avery07.model.Sheet;
 import io.github.avery07.model.Style;
@@ -11,7 +13,9 @@ import io.github.avery07.model.element.Circle;
 import io.github.avery07.model.element.Element;
 import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.FreehandStroke;
+import io.github.avery07.model.element.ImageElement;
 import io.github.avery07.model.element.SymbolInstance;
+import io.github.avery07.model.element.TextElement;
 import io.github.avery07.model.symbol.ParameterDef;
 
 import java.util.Map;
@@ -81,6 +85,10 @@ public final class InspectorPopup {
         content.getChildren().clear();
         if (element instanceof SymbolInstance sym) {
             buildSymbol(sym);
+        } else if (element instanceof TextElement t) {
+            buildText(t);
+        } else if (element instanceof ImageElement img) {
+            buildImage(img);
         } else if (element != null) {
             buildElement(element);
         } else if (sheet != null) {
@@ -191,12 +199,69 @@ public final class InspectorPopup {
         content.getChildren().addAll(labeled("Name", name), new Separator(), layers);
     }
 
+    private void buildText(TextElement t) {
+        content.getChildren().add(title("Text"));
+        TextField field = new TextField(t.content());
+        field.setOnAction(e -> applyText(t, field.getText(), t.fontSize()));
+        content.getChildren().add(labeled("Content", field));
+
+        Spinner<Double> size = new Spinner<>();
+        size.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(6, 400, t.fontSize(), 2));
+        size.setEditable(true);
+        size.setMaxWidth(Double.MAX_VALUE);
+        size.valueProperty().addListener((o, ov, nv) -> applyText(t, t.content(), nv));
+        content.getChildren().add(labeled("Size", size));
+
+        ColorPicker colour = new ColorPicker(Color.web(t.style().stroke()));
+        colour.setOnAction(e -> {
+            Style after = t.style().withStroke(Colors.toHex(colour.getValue()));
+            if (!after.equals(t.style())) {
+                document.undoManager().execute(new SetStyleCommand(t, t.style(), after));
+                document.markDirty();
+            }
+        });
+        content.getChildren().add(labeled("Colour", colour));
+    }
+
+    private void applyText(TextElement t, String newContent, double newSize) {
+        if (!newContent.equals(t.content()) || newSize != t.fontSize()) {
+            document.undoManager().execute(
+                    new SetTextCommand(t, t.content(), t.fontSize(), newContent, newSize));
+            document.markDirty();
+        }
+    }
+
+    private void buildImage(ImageElement img) {
+        content.getChildren().add(title("Image"));
+        Spinner<Double> w = new Spinner<>();
+        w.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 100000, img.width(), 10));
+        w.setEditable(true);
+        w.setMaxWidth(Double.MAX_VALUE);
+        Spinner<Double> h = new Spinner<>();
+        h.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 100000, img.height(), 10));
+        h.setEditable(true);
+        h.setMaxWidth(Double.MAX_VALUE);
+        w.valueProperty().addListener((o, ov, nv) -> applyImageSize(img, nv, img.height()));
+        h.valueProperty().addListener((o, ov, nv) -> applyImageSize(img, img.width(), nv));
+        content.getChildren().addAll(labeled("Width", w), labeled("Height", h));
+    }
+
+    private void applyImageSize(ImageElement img, double w, double h) {
+        if (w != img.width() || h != img.height()) {
+            document.undoManager().execute(new SetImageRectCommand(
+                    img, img.topLeft(), img.width(), img.height(), img.topLeft(), w, h));
+            document.markDirty();
+        }
+    }
+
     private static String typeName(Element e) {
         return switch (e) {
             case EditablePolygon p -> "Polygon (" + p.vertices().size() + " vertices)";
             case Circle c -> "Circle";
             case FreehandStroke f -> "Freehand stroke";
             case SymbolInstance sym -> sym.type().name();
+            case TextElement t -> "Text";
+            case ImageElement img -> "Image";
         };
     }
 

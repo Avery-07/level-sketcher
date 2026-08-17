@@ -13,13 +13,16 @@ import io.github.avery07.model.element.Circle;
 import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.Element;
 import io.github.avery07.model.element.FreehandStroke;
+import io.github.avery07.model.element.ImageElement;
 import io.github.avery07.model.element.SymbolInstance;
+import io.github.avery07.model.element.TextElement;
 import io.github.avery07.model.symbol.SymbolLibrary;
 import io.github.avery07.model.symbol.SymbolType;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 /**
@@ -109,6 +112,20 @@ public final class ProjectIo {
                 ObjectNode params = n.putObject("params");
                 sym.params().forEach(params::put);
             }
+            case TextElement t -> {
+                n.put("kind", "text");
+                n.set("anchor", xy(t.anchor()));
+                n.put("content", t.content());
+                n.put("fontSize", t.fontSize());
+            }
+            case ImageElement img -> {
+                n.put("kind", "image");
+                n.set("topLeft", xy(img.topLeft()));
+                n.put("width", img.width());
+                n.put("height", img.height());
+                n.put("format", img.format());
+                n.put("data", Base64.getEncoder().encodeToString(img.data()));
+            }
         }
         n.set("style", styleNode(e.style()));
         n.put("locked", e.isLocked());
@@ -184,6 +201,11 @@ public final class ProjectIo {
             case "circle" -> new Circle(readVec(n.get("center")), n.path("radius").asDouble());
             case "freehand" -> new FreehandStroke(readPoints(n.get("points")));
             case "symbol" -> readSymbol(n, library);
+            case "text" -> new TextElement(readVec(n.get("anchor")),
+                    n.path("content").asText(""), n.path("fontSize").asDouble(24));
+            case "image" -> new ImageElement(readVec(n.get("topLeft")),
+                    n.path("width").asDouble(), n.path("height").asDouble(),
+                    Base64.getDecoder().decode(n.path("data").asText("")), n.path("format").asText("png"));
             default -> null;
         };
         if (e != null) {

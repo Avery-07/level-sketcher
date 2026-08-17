@@ -2,6 +2,7 @@ package io.github.avery07.view.render;
 
 import io.github.avery07.document.Document;
 import io.github.avery07.document.EditorMode;
+import io.github.avery07.geometry.Rect;
 import io.github.avery07.geometry.Vec2;
 import io.github.avery07.model.Layer;
 import io.github.avery07.model.Sheet;
@@ -10,18 +11,25 @@ import io.github.avery07.model.element.Circle;
 import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.Element;
 import io.github.avery07.model.element.FreehandStroke;
+import io.github.avery07.model.element.ImageElement;
 import io.github.avery07.model.element.SymbolInstance;
+import io.github.avery07.model.element.TextElement;
 import io.github.avery07.model.symbol.PlacementPattern;
 import io.github.avery07.view.ElementHandles;
 import io.github.avery07.view.SheetGeometry;
 import io.github.avery07.view.SheetHandles;
 import io.github.avery07.view.Viewport;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+import javafx.scene.transform.Affine;
 
+import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Draws the workspace: the background and sheets (fill, grid, label, border) on the content
@@ -51,6 +59,7 @@ public final class WorkspaceRenderer {
 
     private final Document document;
     private final Viewport viewport;
+    private final Map<ImageElement, Image> imageCache = new IdentityHashMap<>();
 
     public WorkspaceRenderer(Document document, Viewport viewport) {
         this.document = document;
@@ -213,6 +222,8 @@ public final class WorkspaceRenderer {
             case Circle c -> fillAndStroke(g, s, circlePoints(c), c.style());
             case FreehandStroke f -> strokeOpen(g, s, f.points(), f.style());
             case SymbolInstance sym -> drawSymbol(g, s, sym);
+            case TextElement t -> drawText(g, s, t);
+            case ImageElement img -> drawImage(g, s, img);
         }
     }
 
@@ -224,7 +235,48 @@ public final class WorkspaceRenderer {
             case Circle c -> strokeClosedScreen(g, s, circlePoints(c));
             case FreehandStroke f -> strokeOpenScreen(g, s, f.points());
             case SymbolInstance sym -> drawSymbolHighlight(g, s, sym);
+            case TextElement t -> strokeRectLocal(g, s, t.bounds());
+            case ImageElement img -> strokeRectLocal(g, s, img.bounds());
         }
+    }
+
+    private void drawText(GraphicsContext g, Sheet s, TextElement t) {
+        if (t.content().isEmpty()) {
+            return;
+        }
+        Affine combined = viewport.toAffine();
+        combined.append(SheetGeometry.localToWorld(s));
+        g.save();
+        g.setTransform(combined);
+        g.setFill(Color.web(t.style().stroke()));
+        g.setFont(Font.font(t.fontSize()));
+        g.fillText(t.content(), t.anchor().x(), t.anchor().y());
+        g.restore();
+    }
+
+    private void drawImage(GraphicsContext g, Sheet s, ImageElement img) {
+        Image fx = imageCache.computeIfAbsent(img, k -> {
+            try {
+                return new Image(new ByteArrayInputStream(k.data()));
+            } catch (RuntimeException ex) {
+                return null;
+            }
+        });
+        if (fx == null) {
+            return;
+        }
+        Affine combined = viewport.toAffine();
+        combined.append(SheetGeometry.localToWorld(s));
+        g.save();
+        g.setTransform(combined);
+        g.drawImage(fx, img.topLeft().x(), img.topLeft().y(), img.width(), img.height());
+        g.restore();
+    }
+
+    private void strokeRectLocal(GraphicsContext g, Sheet s, Rect r) {
+        strokeClosedScreen(g, s, List.of(
+                new Vec2(r.minX(), r.minY()), new Vec2(r.maxX(), r.minY()),
+                new Vec2(r.maxX(), r.maxY()), new Vec2(r.minX(), r.maxY())));
     }
 
     // ----- symbols -----
