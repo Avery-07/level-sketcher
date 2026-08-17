@@ -302,10 +302,10 @@ public final class CanvasView extends StackPane implements CanvasContext {
     /** Assembly mode: only sheets are interactive (select, move, resize/rotate/extend, rename). */
     private void pressAssembly(double sx, double sy, Vec2 world, MouseEvent e) {
         if (e.getClickCount() == 2) {
-            Sheet hit = topmostAt(world);
-            if (hit != null && labelHit(hit, sx, sy)) {
-                document.selectSheet(hit);
-                startRename(hit);
+            Sheet labelSheet = sheetLabelAt(sx, sy);
+            if (labelSheet != null) {
+                document.selectSheet(labelSheet);
+                startRename(labelSheet);
                 return;
             }
         }
@@ -319,6 +319,9 @@ public final class CanvasView extends StackPane implements CanvasContext {
             }
         }
         Sheet owner = sheetUnderCursor(world, sx, sy);
+        if (owner == null) {
+            owner = sheetLabelAt(sx, sy); // the name label above the frame grabs its sheet
+        }
         if (owner != null) {
             int handle = SheetHandles.hit(owner, viewport, sx, sy);
             document.selectSheet(owner);
@@ -407,6 +410,17 @@ public final class CanvasView extends StackPane implements CanvasContext {
         activeTool.onPress(this, pointer(e));
         mode = Mode.TOOL;
         requestRender();
+    }
+
+    /** Topmost sheet whose name label is under the cursor, or {@code null}. */
+    private Sheet sheetLabelAt(double sx, double sy) {
+        var sheets = document.workspace().sheets();
+        for (int i = sheets.size() - 1; i >= 0; i--) {
+            if (labelHit(sheets.get(i), sx, sy)) {
+                return sheets.get(i);
+            }
+        }
+        return null;
     }
 
     /** Topmost sheet whose body or border band is under the cursor, or {@code null}. */
@@ -524,6 +538,9 @@ public final class CanvasView extends StackPane implements CanvasContext {
         Vec2 world = worldOf(sx, sy);
         if (document.editorMode() == EditorMode.ASSEMBLY) {
             Sheet owner = sheetUnderCursor(world, sx, sy);
+            if (owner == null) {
+                owner = sheetLabelAt(sx, sy);
+            }
             document.setHoveredSheet(owner); // reveal grab handles on hover
             setCursor(owner != null ? Cursor.MOVE : Cursor.DEFAULT);
         } else {
