@@ -73,4 +73,12 @@ public final class Circle implements Element {
         return new Rect(center.x() - radius, center.y() - radius,
                 center.x() + radius, center.y() + radius);
     }
+
+    @Override
+    public Circle copy() {
+        Circle c = new Circle(center, radius);
+        c.style = style;
+        c.locked = locked;
+        return c;
+    }
 }

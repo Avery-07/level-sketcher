@@ -163,6 +163,33 @@ public final class Sheet {
         }
     }
 
+    /** A deep copy of this sheet — geometry plus its layers and their elements. */
+    public Sheet copy() {
+        Sheet c = new Sheet(name, center, width(), height());
+        c.rotation = rotation;
+        c.scale = scale;
+        c.left = left;
+        c.top = top;
+        c.right = right;
+        c.bottom = bottom;
+        c.layers.clear();
+        Layer activeCopy = null;
+        for (Layer layer : layers) {
+            Layer lc = new Layer(layer.name());
+            lc.setVisible(layer.isVisible());
+            for (Element e : layer.elements()) {
+                lc.addElement(e.copy());
+            }
+            c.layers.add(lc);
+            if (layer == activeLayer) {
+                activeCopy = lc;
+            }
+        }
+        c.activeLayer = activeCopy != null ? activeCopy
+                : (c.layers.isEmpty() ? null : c.layers.get(c.layers.size() - 1));
+        return c;
+    }
+
     /** The layer containing the given element, or {@code null} if none. */
     public Layer layerOf(Element element) {
         for (Layer layer : layers) {

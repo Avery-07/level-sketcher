@@ -47,7 +47,6 @@ import java.util.Map;
 public final class App extends Application {
 
     private static final String APP_NAME = "LevelSketcher";
-    private static final double TOOL_BTN_WIDTH = 42;
 
     private final Document document = new Document();
     private final ToggleGroup toolGroup = new ToggleGroup();
@@ -134,12 +133,18 @@ public final class App extends Application {
                 toolButton(Icons.freehand(), "Freehand", "D", KeyCode.D, canvas::useFreehandTool),
                 toolButton(Icons.eraser(), "Erase", "E", KeyCode.E, canvas::useEraserTool));
 
+        sheetColumn.setMaxWidth(Double.MAX_VALUE);
+        drawColumn.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(sheetColumn, Priority.ALWAYS);
+        HBox.setHgrow(drawColumn, Priority.ALWAYS);
         return new HBox(4, sheetColumn, drawColumn);
     }
 
     private Node buildEditRow() {
         Button undo = glyphButton("↶", "Undo (Ctrl+Z)", canvas::undo);
         Button redo = glyphButton("↷", "Redo (Ctrl+Y)", canvas::redo);
+        HBox.setHgrow(undo, Priority.ALWAYS);
+        HBox.setHgrow(redo, Priority.ALWAYS);
         return new HBox(4, undo, redo);
     }
 
@@ -174,7 +179,7 @@ public final class App extends Application {
     private ToggleButton toolButton(Node icon, String name, String shortcut, KeyCode key, Runnable activate) {
         ToggleButton button = new ToggleButton();
         button.setGraphic(icon);
-        button.setPrefWidth(TOOL_BTN_WIDTH);
+        button.setMaxWidth(Double.MAX_VALUE);
         button.setToggleGroup(toolGroup);
         button.setTooltip(new Tooltip(name + "  (" + shortcut + ")"));
         button.setOnAction(e -> {
@@ -193,7 +198,7 @@ public final class App extends Application {
     private Button actionButton(Node icon, String tip, Runnable action) {
         Button button = new Button();
         button.setGraphic(icon);
-        button.setPrefWidth(TOOL_BTN_WIDTH);
+        button.setMaxWidth(Double.MAX_VALUE);
         button.setTooltip(new Tooltip(tip));
         button.setOnAction(e -> action.run());
         return button;
@@ -201,7 +206,7 @@ public final class App extends Application {
 
     private Button glyphButton(String glyph, String tip, Runnable action) {
         Button button = new Button(glyph);
-        button.setPrefWidth(TOOL_BTN_WIDTH);
+        button.setMaxWidth(Double.MAX_VALUE);
         button.setTooltip(new Tooltip(tip));
         button.setOnAction(e -> action.run());
         return button;

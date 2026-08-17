@@ -61,6 +61,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private static final double DEFAULT_SHEET_W = 400;
     private static final double DEFAULT_SHEET_H = 300;
     private static final double MIN_SHEET_SIZE = 20; // world units for a dragged sheet
+    private static final double PASTE_OFFSET = 24;    // offset applied to a pasted copy
 
     private enum Mode { NONE, PAN, SHEET, SHEET_CREATE, ELEMENT, ELEMENT_EDIT, TOOL }
 
@@ -188,6 +189,48 @@ public final class CanvasView extends StackPane implements CanvasContext {
                 execute(new RemoveElementCommand(owner, el));
                 document.clearSelection();
             }
+        }
+    }
+
+    /** Copy the current selection: the selected element in Edition, the selected sheet in Assembly. */
+    public void copySelection() {
+        if (document.editorMode() == EditorMode.EDITION) {
+            Element el = document.selectedElement();
+            if (el != null) {
+                document.setClipboardElement(el.copy());
+            }
+        } else {
+            Sheet s = document.selectedSheet();
+            if (s != null) {
+                document.setClipboardSheet(s.copy());
+            }
+        }
+    }
+
+    /** Paste the clipboard: a copied element into the current sheet, or a copied sheet, offset. */
+    public void pasteClipboard() {
+        if (document.editorMode() == EditorMode.EDITION) {
+            Element clip = document.clipboardElement();
+            Sheet target = document.selectedSheet();
+            if (target == null && !document.workspace().sheets().isEmpty()) {
+                target = document.workspace().sheets().get(document.workspace().sheets().size() - 1);
+            }
+            if (clip == null || target == null) {
+                return;
+            }
+            Element clone = clip.copy();
+            clone.translate(PASTE_OFFSET, PASTE_OFFSET);
+            execute(new AddElementCommand(target, clone));
+            document.selectElement(target, clone);
+        } else {
+            Sheet clip = document.clipboardSheet();
+            if (clip == null) {
+                return;
+            }
+            Sheet clone = clip.copy();
+            clone.setCenter(new Vec2(clone.center().x() + PASTE_OFFSET, clone.center().y() + PASTE_OFFSET));
+            execute(new AddSheetCommand(document.workspace(), clone));
+            document.selectSheet(clone);
         }
     }
 
@@ -598,6 +641,14 @@ public final class CanvasView extends StackPane implements CanvasContext {
         }
         if (e.isShortcutDown() && c == KeyCode.Y) {
             redo();
+            return;
+        }
+        if (e.isShortcutDown() && c == KeyCode.C) {
+            copySelection();
+            return;
+        }
+        if (e.isShortcutDown() && c == KeyCode.V) {
+            pasteClipboard();
             return;
         }
         if (c == KeyCode.ESCAPE) {

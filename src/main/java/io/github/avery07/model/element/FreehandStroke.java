@@ -71,4 +71,12 @@ public final class FreehandStroke implements Element {
         }
         return new Rect(minX, minY, maxX, maxY);
     }
+
+    @Override
+    public FreehandStroke copy() {
+        FreehandStroke c = new FreehandStroke(points);
+        c.style = style;
+        c.locked = locked;
+        return c;
+    }
 }

@@ -142,4 +142,15 @@ public final class SymbolInstance implements Element {
         }
         return new Rect(minX, minY, maxX, maxY);
     }
+
+    @Override
+    public SymbolInstance copy() {
+        SymbolInstance c = new SymbolInstance(type, anchors);
+        c.name = name;
+        c.params.clear();
+        c.params.putAll(params);
+        c.style = style;
+        c.locked = locked;
+        return c;
+    }
 }

@@ -32,6 +32,8 @@ public final class Document {
     private Sheet selectedSheet;
     private Element selectedElement;
     private Sheet hoveredSheet;   // transient UI hover, not part of the document
+    private Element clipboardElement; // in-app copy/paste
+    private Sheet clipboardSheet;
     private Style currentStyle = Style.DEFAULT; // style applied to newly drawn shapes
     private EditorMode editorMode = EditorMode.ASSEMBLY;
     private Path file;      // null until first save
@@ -65,6 +67,22 @@ public final class Document {
 
     public SymbolLibrary symbolLibrary() {
         return symbolLibrary;
+    }
+
+    public Element clipboardElement() {
+        return clipboardElement;
+    }
+
+    public void setClipboardElement(Element element) {
+        this.clipboardElement = element;
+    }
+
+    public Sheet clipboardSheet() {
+        return clipboardSheet;
+    }
+
+    public void setClipboardSheet(Sheet sheet) {
+        this.clipboardSheet = sheet;
     }
 
     public UndoManager undoManager() {

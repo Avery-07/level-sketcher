@@ -27,4 +27,7 @@ public sealed interface Element permits EditablePolygon, Circle, FreehandStroke,
 
     /** Local-space bounding box. */
     Rect bounds();
+
+    /** A deep copy of this element (for duplicate / copy-paste). */
+    Element copy();
 }

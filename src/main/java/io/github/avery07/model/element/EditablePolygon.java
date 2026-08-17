@@ -90,4 +90,12 @@ public final class EditablePolygon implements Element {
         }
         return new Rect(minX, minY, maxX, maxY);
     }
+
+    @Override
+    public EditablePolygon copy() {
+        EditablePolygon c = new EditablePolygon(vertices);
+        c.style = style;
+        c.locked = locked;
+        return c;
+    }
 }
