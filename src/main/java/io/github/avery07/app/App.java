@@ -123,7 +123,7 @@ public final class App extends Application {
     }
 
     private Node buildToolColumns() {
-        addSheetButton = actionButton(Icons.addSheet(), "Add a sheet", canvas::addSheetAtCenter);
+        addSheetButton = actionButton(Icons.addSheet(), "Add a sheet — then click or drag", canvas::armAddSheet);
         VBox sheetColumn = new VBox(4, addSheetButton,
                 actionButton(Icons.trash(), "Delete selection (Del)", canvas::deleteSelected));
 

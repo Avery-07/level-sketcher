@@ -23,6 +23,7 @@ public final class SymbolInstance implements Element {
     public static final double MARKER_RADIUS = 8;
 
     private final SymbolType type;
+    private String name;
     private final List<Vec2> anchors;
     private final Map<String, Double> params;
     private Style style;
@@ -30,6 +31,7 @@ public final class SymbolInstance implements Element {
 
     public SymbolInstance(SymbolType type, List<Vec2> anchors) {
         this.type = type;
+        this.name = type.name();
         this.anchors = new ArrayList<>(anchors);
         this.params = new LinkedHashMap<>();
         for (ParameterDef p : type.parameters()) {
@@ -40,6 +42,15 @@ public final class SymbolInstance implements Element {
 
     public SymbolType type() {
         return type;
+    }
+
+    /** The instance's display label (defaults to the type name, editable after placement). */
+    public String name() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     public List<Vec2> anchors() {

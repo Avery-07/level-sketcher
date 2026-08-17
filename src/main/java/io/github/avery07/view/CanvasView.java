@@ -90,6 +90,8 @@ public final class CanvasView extends StackPane implements CanvasContext {
     // Sheet-creation drag state (Assembly, empty canvas).
     private Vec2 createStartWorld;
     private Vec2 createCurrentWorld;
+    private boolean pendingSheetPlacement; // armed by the Add Sheet button
+    private boolean armedStandardIfClick;  // a plain click while armed drops a standard sheet
 
     public CanvasView(Document document) {
         this.document = document;
@@ -157,9 +159,10 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     // ----- other public actions -----
 
-    public void addSheetAtCenter() {
-        createSheet(viewport.toWorld(new Vec2(getWidth() / 2, getHeight() / 2)),
-                DEFAULT_SHEET_W, DEFAULT_SHEET_H);
+    /** Arm sheet placement: the next click drops a standard sheet, a drag rubber-bands a sized one. */
+    public void armAddSheet() {
+        pendingSheetPlacement = true;
+        setCursor(Cursor.CROSSHAIR);
         requestFocus();
     }
 
@@ -307,6 +310,15 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     /** Assembly mode: only sheets are interactive (select, move, resize/rotate/extend, rename). */
     private void pressAssembly(double sx, double sy, Vec2 world, MouseEvent e) {
+        if (pendingSheetPlacement) {
+            pendingSheetPlacement = false;
+            document.clearSelection();
+            createStartWorld = world;
+            createCurrentWorld = world;
+            armedStandardIfClick = true;
+            mode = Mode.SHEET_CREATE;
+            return;
+        }
         if (e.getClickCount() == 2) {
             Sheet labelSheet = sheetLabelAt(sx, sy);
             if (labelSheet != null) {
@@ -517,7 +529,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
         mode = Mode.NONE;
     }
 
-    /** Turn the rubber-banded region into a sheet, if it's big enough. */
+    /** Turn the rubber-banded region into a sheet: a real drag sizes it, an armed click uses defaults. */
     private void finishSheetCreate() {
         if (createStartWorld != null && createCurrentWorld != null) {
             double w = Math.abs(createCurrentWorld.x() - createStartWorld.x());
@@ -525,10 +537,13 @@ public final class CanvasView extends StackPane implements CanvasContext {
             if (w >= MIN_SHEET_SIZE && h >= MIN_SHEET_SIZE) {
                 createSheet(new Vec2((createStartWorld.x() + createCurrentWorld.x()) / 2,
                         (createStartWorld.y() + createCurrentWorld.y()) / 2), w, h);
+            } else if (armedStandardIfClick) {
+                createSheet(createStartWorld, DEFAULT_SHEET_W, DEFAULT_SHEET_H);
             }
         }
         createStartWorld = null;
         createCurrentWorld = null;
+        armedStandardIfClick = false;
     }
 
     private void onMove(MouseEvent e) {
@@ -542,6 +557,11 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private void updateHover(double sx, double sy) {
         Vec2 world = worldOf(sx, sy);
         if (document.editorMode() == EditorMode.ASSEMBLY) {
+            if (pendingSheetPlacement) {
+                document.setHoveredSheet(null);
+                setCursor(Cursor.CROSSHAIR);
+                return;
+            }
             Sheet owner = sheetUnderCursor(world, sx, sy);
             if (owner == null) {
                 owner = sheetLabelAt(sx, sy);
@@ -581,7 +601,10 @@ public final class CanvasView extends StackPane implements CanvasContext {
             return;
         }
         if (c == KeyCode.ESCAPE) {
-            if (inspector.isShowing()) {
+            if (pendingSheetPlacement) {
+                pendingSheetPlacement = false;
+                setCursor(Cursor.DEFAULT);
+            } else if (inspector.isShowing()) {
                 inspector.hide();
             } else if (activeTool != null && activeTool.inProgress()) {
                 activeTool.cancel(this);

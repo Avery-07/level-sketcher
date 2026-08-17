@@ -274,7 +274,7 @@ public final class WorkspaceRenderer {
         g.strokeOval(c.x() - r, c.y() - r, 2 * r, 2 * r);
         g.setFill(col);
         g.setFont(LABEL_FONT);
-        g.fillText(sym.type().name(), c.x() + r + 4, c.y() + 4);
+        g.fillText(sym.name(), c.x() + r + 4, c.y() + 4);
     }
 
     private double markerRadius(Sheet s) {
@@ -345,7 +345,7 @@ public final class WorkspaceRenderer {
         Vec2 c = screen(s, first.x(), first.y());
         g.setFill(Color.web(sym.style().stroke()));
         g.setFont(LABEL_FONT);
-        g.fillText(sym.type().name(), c.x() + 4, c.y() - 4);
+        g.fillText(sym.name(), c.x() + 4, c.y() - 4);
     }
 
     private void drawElementHandles(GraphicsContext g, Sheet s, Element e) {

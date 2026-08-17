@@ -18,16 +18,15 @@ public final class SymbolLibrary {
         return types;
     }
 
-    /** A default library with one representative type per placement pattern. */
+    /** The four default types, one per placement pattern. */
     public static SymbolLibrary builtIn() {
         return new SymbolLibrary(List.of(
-                new SymbolType("spawn", "Spawn", PlacementPattern.MARKER, "#22c55e", List.of()),
-                new SymbolType("objective", "Objective", PlacementPattern.MARKER, "#a855f7", List.of()),
+                new SymbolType("poi", "POI", PlacementPattern.MARKER, "#6366f1", List.of()),
+                new SymbolType("zone", "Zone", PlacementPattern.REGION, "#ef4444", List.of()),
                 new SymbolType("sight_cone", "Sight Cone", PlacementPattern.PARAMETRIC, "#f59e0b",
                         List.of(ParameterDef.angle("facing", "Facing", 0),
                                 ParameterDef.angle("fov", "FOV", 60),
                                 ParameterDef.number("range", "Range", 10, 2000, 150))),
-                new SymbolType("patrol", "Patrol Route", PlacementPattern.PATH, "#3b82f6", List.of()),
-                new SymbolType("danger", "Danger Zone", PlacementPattern.REGION, "#ef4444", List.of())));
+                new SymbolType("route", "Route", PlacementPattern.PATH, "#3b82f6", List.of())));
     }
 }

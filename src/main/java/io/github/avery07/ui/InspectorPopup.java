@@ -1,6 +1,7 @@
 package io.github.avery07.ui;
 
 import io.github.avery07.command.RenameSheetCommand;
+import io.github.avery07.command.RenameSymbolCommand;
 import io.github.avery07.command.SetStyleCommand;
 import io.github.avery07.command.SetSymbolParamsCommand;
 import io.github.avery07.document.Document;
@@ -134,6 +135,16 @@ public final class InspectorPopup {
 
     private void buildSymbol(SymbolInstance sym) {
         content.getChildren().add(title(sym.type().name()));
+
+        TextField name = new TextField(sym.name());
+        name.setOnAction(e -> {
+            String text = name.getText().trim();
+            if (!text.isEmpty() && !text.equals(sym.name())) {
+                document.undoManager().execute(new RenameSymbolCommand(sym, sym.name(), text));
+                document.markDirty();
+            }
+        });
+        content.getChildren().add(labeled("Name", name));
 
         for (ParameterDef def : sym.type().parameters()) {
             Spinner<Double> spinner = new Spinner<>();
