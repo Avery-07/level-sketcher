@@ -56,8 +56,11 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     private static final double ELEMENT_HIT_PIXELS = 6;
     private static final double BORDER_BAND = 6; // screen px grab band around a sheet's frame
+    private static final double DEFAULT_SHEET_W = 400;
+    private static final double DEFAULT_SHEET_H = 300;
+    private static final double MIN_SHEET_SIZE = 20; // world units for a dragged sheet
 
-    private enum Mode { NONE, PAN, SHEET, ELEMENT, ELEMENT_EDIT, TOOL }
+    private enum Mode { NONE, PAN, SHEET, SHEET_CREATE, ELEMENT, ELEMENT_EDIT, TOOL }
 
     private final Document document;
     private final Viewport viewport = new Viewport();
@@ -81,6 +84,10 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private Element movingElement;
     private Vec2 lastMoveLocal;
     private double moveDx, moveDy;
+
+    // Sheet-creation drag state (Assembly, empty canvas).
+    private Vec2 createStartWorld;
+    private Vec2 createCurrentWorld;
 
     public CanvasView(Document document) {
         this.document = document;
@@ -145,11 +152,16 @@ public final class CanvasView extends StackPane implements CanvasContext {
     // ----- other public actions -----
 
     public void addSheetAtCenter() {
-        Vec2 worldCenter = viewport.toWorld(new Vec2(getWidth() / 2, getHeight() / 2));
-        Sheet sheet = new Sheet(nextSheetName(), worldCenter, 400, 300);
+        createSheet(viewport.toWorld(new Vec2(getWidth() / 2, getHeight() / 2)),
+                DEFAULT_SHEET_W, DEFAULT_SHEET_H);
+        requestFocus();
+    }
+
+    /** Create a sheet with the given world-space centre and size, and select it. */
+    private void createSheet(Vec2 worldCenter, double width, double height) {
+        Sheet sheet = new Sheet(nextSheetName(), worldCenter, width, height);
         execute(new AddSheetCommand(document.workspace(), sheet));
         document.selectSheet(sheet);
-        requestFocus();
     }
 
     public void deleteSelected() {
@@ -237,6 +249,26 @@ public final class CanvasView extends StackPane implements CanvasContext {
         if (activeTool != null) {
             activeTool.paintOverlay(overlay.getGraphicsContext2D(), this);
         }
+        if (mode == Mode.SHEET_CREATE) {
+            paintSheetCreatePreview(overlay.getGraphicsContext2D());
+        }
+    }
+
+    private void paintSheetCreatePreview(javafx.scene.canvas.GraphicsContext g) {
+        if (createStartWorld == null || createCurrentWorld == null) {
+            return;
+        }
+        Vec2 a = viewport.toScreen(createStartWorld);
+        Vec2 b = viewport.toScreen(createCurrentWorld);
+        double x = Math.min(a.x(), b.x()), y = Math.min(a.y(), b.y());
+        double w = Math.abs(a.x() - b.x()), h = Math.abs(a.y() - b.y());
+        g.setFill(javafx.scene.paint.Color.rgb(59, 130, 246, 0.08));
+        g.fillRect(x, y, w, h);
+        g.setStroke(javafx.scene.paint.Color.web("#3b82f6"));
+        g.setLineWidth(1.5);
+        g.setLineDashes(5, 4);
+        g.strokeRect(x, y, w, h);
+        g.setLineDashes(null);
     }
 
     // ----- input -----
@@ -298,8 +330,15 @@ public final class CanvasView extends StackPane implements CanvasContext {
             mode = Mode.SHEET;
             return;
         }
+        // Empty canvas: double-click drops a standard sheet, a drag rubber-bands a sized one.
         document.clearSelection();
-        beginPan(sx, sy);
+        if (e.getClickCount() == 2) {
+            createSheet(world, DEFAULT_SHEET_W, DEFAULT_SHEET_H);
+            return;
+        }
+        createStartWorld = world;
+        createCurrentWorld = world;
+        mode = Mode.SHEET_CREATE;
     }
 
     /** Edition mode: only sheet content is interactive (draw, select/move/edit elements). */
@@ -412,6 +451,10 @@ public final class CanvasView extends StackPane implements CanvasContext {
                     requestRender();
                 }
             }
+            case SHEET_CREATE -> {
+                createCurrentWorld = worldOf(e.getX(), e.getY());
+                requestRender();
+            }
             default -> { }
         }
     }
@@ -449,9 +492,24 @@ public final class CanvasView extends StackPane implements CanvasContext {
                     elementEditor.end();
                 }
             }
+            case SHEET_CREATE -> finishSheetCreate();
             default -> { }
         }
         mode = Mode.NONE;
+    }
+
+    /** Turn the rubber-banded region into a sheet, if it's big enough. */
+    private void finishSheetCreate() {
+        if (createStartWorld != null && createCurrentWorld != null) {
+            double w = Math.abs(createCurrentWorld.x() - createStartWorld.x());
+            double h = Math.abs(createCurrentWorld.y() - createStartWorld.y());
+            if (w >= MIN_SHEET_SIZE && h >= MIN_SHEET_SIZE) {
+                createSheet(new Vec2((createStartWorld.x() + createCurrentWorld.x()) / 2,
+                        (createStartWorld.y() + createCurrentWorld.y()) / 2), w, h);
+            }
+        }
+        createStartWorld = null;
+        createCurrentWorld = null;
     }
 
     private void onMove(MouseEvent e) {
