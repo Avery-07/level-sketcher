@@ -2,6 +2,7 @@ package io.github.avery07.ui;
 
 import io.github.avery07.command.RenameSheetCommand;
 import io.github.avery07.command.SetStyleCommand;
+import io.github.avery07.command.SetSymbolParamsCommand;
 import io.github.avery07.document.Document;
 import io.github.avery07.model.Sheet;
 import io.github.avery07.model.Style;
@@ -9,6 +10,10 @@ import io.github.avery07.model.element.Circle;
 import io.github.avery07.model.element.Element;
 import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.FreehandStroke;
+import io.github.avery07.model.element.SymbolInstance;
+import io.github.avery07.model.symbol.ParameterDef;
+
+import java.util.Map;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.CheckBox;
@@ -73,7 +78,9 @@ public final class InspectorPopup {
         Element element = document.selectedElement();
         Sheet sheet = document.selectedSheet();
         content.getChildren().clear();
-        if (element != null) {
+        if (element instanceof SymbolInstance sym) {
+            buildSymbol(sym);
+        } else if (element != null) {
             buildElement(element);
         } else if (sheet != null) {
             buildSheet(sheet);
@@ -125,6 +132,41 @@ public final class InspectorPopup {
         }
     }
 
+    private void buildSymbol(SymbolInstance sym) {
+        content.getChildren().add(title(sym.type().name()));
+
+        for (ParameterDef def : sym.type().parameters()) {
+            Spinner<Double> spinner = new Spinner<>();
+            double step = def.angle() ? 5 : 10;
+            spinner.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(
+                    def.min(), def.max(), sym.param(def.key()), step));
+            spinner.setEditable(true);
+            spinner.setMaxWidth(Double.MAX_VALUE);
+            spinner.valueProperty().addListener((o, ov, nv) -> applyParam(sym, def.key(), nv));
+            content.getChildren().add(labeled(def.label() + (def.angle() ? " (°)" : ""), spinner));
+        }
+
+        ColorPicker colour = new ColorPicker(Color.web(sym.style().stroke()));
+        colour.setOnAction(e -> {
+            Style after = sym.style().withStroke(Colors.toHex(colour.getValue()));
+            if (!after.equals(sym.style())) {
+                document.undoManager().execute(new SetStyleCommand(sym, sym.style(), after));
+                document.markDirty();
+            }
+        });
+        content.getChildren().add(labeled("Colour", colour));
+    }
+
+    private void applyParam(SymbolInstance sym, String key, double value) {
+        Map<String, Double> before = sym.copyParams();
+        Map<String, Double> after = sym.copyParams();
+        after.put(key, value);
+        if (!after.equals(before)) {
+            document.undoManager().execute(new SetSymbolParamsCommand(sym, before, after));
+            document.markDirty();
+        }
+    }
+
     private void buildSheet(Sheet sheet) {
         content.getChildren().add(title("Sheet"));
         TextField name = new TextField(sheet.name());
@@ -143,6 +185,7 @@ public final class InspectorPopup {
             case EditablePolygon p -> "Polygon (" + p.vertices().size() + " vertices)";
             case Circle c -> "Circle";
             case FreehandStroke f -> "Freehand stroke";
+            case SymbolInstance sym -> sym.type().name();
         };
     }
 

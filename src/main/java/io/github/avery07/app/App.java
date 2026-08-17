@@ -91,7 +91,15 @@ public final class App extends Application {
         file.getItems().addAll(disabled("Open…"), disabled("Save"), disabled("Save As…"), disabled("Export…"));
 
         Menu systems = new Menu("Systems");
-        systems.getItems().add(disabled("Symbol Library… (coming soon)"));
+        for (io.github.avery07.model.symbol.SymbolType type : document.symbolLibrary().types()) {
+            MenuItem item = new MenuItem(type.name());
+            item.setOnAction(e -> {
+                setMode(EditorMode.EDITION);
+                toolGroup.selectToggle(null);
+                canvas.useSymbolTool(type);
+            });
+            systems.getItems().add(item);
+        }
 
         return new MenuBar(file, systems);
     }

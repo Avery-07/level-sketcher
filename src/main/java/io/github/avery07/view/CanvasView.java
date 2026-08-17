@@ -140,6 +140,10 @@ public final class CanvasView extends StackPane implements CanvasContext {
         setActiveTool(new EraserTool());
     }
 
+    public void useSymbolTool(io.github.avery07.model.symbol.SymbolType type) {
+        setActiveTool(new io.github.avery07.tool.SymbolTool(type));
+    }
+
     private void setActiveTool(Tool tool) {
         if (activeTool != null) {
             activeTool.cancel(this);

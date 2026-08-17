@@ -6,6 +6,7 @@ import io.github.avery07.model.element.Circle;
 import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.Element;
 import io.github.avery07.model.element.FreehandStroke;
+import io.github.avery07.model.element.SymbolInstance;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -50,6 +51,7 @@ public final class ElementHandles {
             case Circle c -> out.add(new Handle(Kind.RADIUS, 0,
                     screen(s, new Vec2(c.center().x() + c.radius(), c.center().y()), vp)));
             case FreehandStroke f -> { }
+            case SymbolInstance sym -> { } // symbols move as a whole; anchor editing is a later phase
         }
         return out;
     }

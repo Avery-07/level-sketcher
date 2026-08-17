@@ -10,6 +10,8 @@ import io.github.avery07.model.element.Circle;
 import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.Element;
 import io.github.avery07.model.element.FreehandStroke;
+import io.github.avery07.model.element.SymbolInstance;
+import io.github.avery07.model.symbol.PlacementPattern;
 import io.github.avery07.view.ElementHandles;
 import io.github.avery07.view.SheetGeometry;
 import io.github.avery07.view.SheetHandles;
@@ -206,6 +208,7 @@ public final class WorkspaceRenderer {
             case EditablePolygon p -> fillAndStroke(g, s, p.vertices(), p.style());
             case Circle c -> fillAndStroke(g, s, circlePoints(c), c.style());
             case FreehandStroke f -> strokeOpen(g, s, f.points(), f.style());
+            case SymbolInstance sym -> drawSymbol(g, s, sym);
         }
     }
 
@@ -216,7 +219,133 @@ public final class WorkspaceRenderer {
             case EditablePolygon p -> strokeClosedScreen(g, s, p.vertices());
             case Circle c -> strokeClosedScreen(g, s, circlePoints(c));
             case FreehandStroke f -> strokeOpenScreen(g, s, f.points());
+            case SymbolInstance sym -> drawSymbolHighlight(g, s, sym);
         }
+    }
+
+    // ----- symbols -----
+
+    private void drawSymbol(GraphicsContext g, Sheet s, SymbolInstance sym) {
+        if (sym.anchors().isEmpty()) {
+            return;
+        }
+        Color col = Color.web(sym.style().stroke());
+        switch (sym.type().pattern()) {
+            case MARKER -> drawMarker(g, s, sym, col);
+            case PARAMETRIC -> {
+                fillClosed(g, s, conePoints(sym), col, 0.18);
+                drawMarker(g, s, sym, col);
+            }
+            case PATH -> {
+                strokePath(g, s, sym.anchors(), col);
+                drawAnchorDots(g, s, sym.anchors(), col);
+                label(g, s, sym);
+            }
+            case REGION -> {
+                fillClosed(g, s, sym.anchors(), col, 0.15);
+                label(g, s, sym);
+            }
+        }
+    }
+
+    private void drawSymbolHighlight(GraphicsContext g, Sheet s, SymbolInstance sym) {
+        if (sym.anchors().isEmpty()) {
+            return;
+        }
+        switch (sym.type().pattern()) {
+            case MARKER -> {
+                Vec2 c = screen(s, sym.anchors().get(0).x(), sym.anchors().get(0).y());
+                double r = markerRadius(s) + 3;
+                g.strokeOval(c.x() - r, c.y() - r, 2 * r, 2 * r);
+            }
+            case PARAMETRIC -> strokeClosedScreen(g, s, conePoints(sym));
+            case PATH -> strokeOpenScreen(g, s, sym.anchors());
+            case REGION -> strokeClosedScreen(g, s, sym.anchors());
+        }
+    }
+
+    private void drawMarker(GraphicsContext g, Sheet s, SymbolInstance sym, Color col) {
+        Vec2 c = screen(s, sym.anchors().get(0).x(), sym.anchors().get(0).y());
+        double r = markerRadius(s);
+        g.setFill(col.deriveColor(0, 1, 1, 0.9));
+        g.fillOval(c.x() - r, c.y() - r, 2 * r, 2 * r);
+        g.setStroke(Color.WHITE);
+        g.setLineWidth(1.5);
+        g.strokeOval(c.x() - r, c.y() - r, 2 * r, 2 * r);
+        g.setFill(col);
+        g.setFont(LABEL_FONT);
+        g.fillText(sym.type().name(), c.x() + r + 4, c.y() + 4);
+    }
+
+    private double markerRadius(Sheet s) {
+        return SymbolInstance.MARKER_RADIUS * s.scale() * viewport.zoom();
+    }
+
+    /** Wedge polygon for a parametric sight cone, in local coordinates. */
+    private List<Vec2> conePoints(SymbolInstance sym) {
+        Vec2 a = sym.anchors().get(0);
+        double facing = Math.toRadians(sym.param("facing"));
+        double half = Math.toRadians(sym.param("fov")) / 2;
+        double range = sym.param("range");
+        int segments = 24;
+        List<Vec2> pts = new ArrayList<>(segments + 2);
+        pts.add(a);
+        for (int i = 0; i <= segments; i++) {
+            double t = facing - half + (2 * half) * i / segments;
+            pts.add(new Vec2(a.x() + range * Math.cos(t), a.y() + range * Math.sin(t)));
+        }
+        return pts;
+    }
+
+    private void fillClosed(GraphicsContext g, Sheet s, List<Vec2> local, Color col, double alpha) {
+        int n = local.size();
+        if (n < 3) {
+            return;
+        }
+        double[] xs = new double[n];
+        double[] ys = new double[n];
+        toScreenArrays(s, local, xs, ys);
+        g.setFill(col.deriveColor(0, 1, 1, alpha));
+        g.fillPolygon(xs, ys, n);
+        g.setStroke(col);
+        g.setLineWidth(1.5);
+        g.strokePolygon(xs, ys, n);
+    }
+
+    private void strokePath(GraphicsContext g, Sheet s, List<Vec2> local, Color col) {
+        int n = local.size();
+        if (n < 2) {
+            return;
+        }
+        double[] xs = new double[n];
+        double[] ys = new double[n];
+        toScreenArrays(s, local, xs, ys);
+        g.setStroke(col);
+        g.setLineWidth(2);
+        g.strokePolyline(xs, ys, n);
+        // Arrowhead on the last segment.
+        double angle = Math.atan2(ys[n - 1] - ys[n - 2], xs[n - 1] - xs[n - 2]);
+        double ah = 9;
+        g.strokeLine(xs[n - 1], ys[n - 1],
+                xs[n - 1] - ah * Math.cos(angle - Math.PI / 7), ys[n - 1] - ah * Math.sin(angle - Math.PI / 7));
+        g.strokeLine(xs[n - 1], ys[n - 1],
+                xs[n - 1] - ah * Math.cos(angle + Math.PI / 7), ys[n - 1] - ah * Math.sin(angle + Math.PI / 7));
+    }
+
+    private void drawAnchorDots(GraphicsContext g, Sheet s, List<Vec2> local, Color col) {
+        g.setFill(col);
+        for (Vec2 v : local) {
+            Vec2 c = screen(s, v.x(), v.y());
+            g.fillOval(c.x() - 3, c.y() - 3, 6, 6);
+        }
+    }
+
+    private void label(GraphicsContext g, Sheet s, SymbolInstance sym) {
+        Vec2 first = sym.anchors().get(0);
+        Vec2 c = screen(s, first.x(), first.y());
+        g.setFill(Color.web(sym.style().stroke()));
+        g.setFont(LABEL_FONT);
+        g.fillText(sym.type().name(), c.x() + 4, c.y() - 4);
     }
 
     private void drawElementHandles(GraphicsContext g, Sheet s, Element e) {

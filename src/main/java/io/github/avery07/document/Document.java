@@ -5,6 +5,7 @@ import io.github.avery07.model.Sheet;
 import io.github.avery07.model.Style;
 import io.github.avery07.model.Workspace;
 import io.github.avery07.model.element.Element;
+import io.github.avery07.model.symbol.SymbolLibrary;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -24,6 +25,7 @@ public final class Document {
     }
 
     private final Workspace workspace = new Workspace();
+    private final SymbolLibrary symbolLibrary = SymbolLibrary.builtIn();
     private final UndoManager undoManager = new UndoManager();
     private final List<ChangeListener> listeners = new ArrayList<>();
 
@@ -59,6 +61,10 @@ public final class Document {
 
     public Workspace workspace() {
         return workspace;
+    }
+
+    public SymbolLibrary symbolLibrary() {
+        return symbolLibrary;
     }
 
     public UndoManager undoManager() {

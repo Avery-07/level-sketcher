@@ -48,7 +48,7 @@ io.github.avery07
 │   │           ElementHandles, ElementEditor (vertex/edge/radius editing)
 │   └── render/  WorkspaceRenderer (background, sheets, grid, selection + handles)
 ├── tool/       Tool + CanvasContext (decoupling boundary), PointerInput/KeyInput,
-│   │           Rectangle/Circle/Polygon/Freehand/Eraser tools (gestures)
+│   │           Rectangle/Circle/Polygon/Freehand/Eraser + SymbolTool (gestures)
 ├── ui/         Toolbar, Inspector, LayerPanel, SymbolLibraryPanel, MenuBar
 └── io/         Jackson serialization, save/load, image + JSON/SVG export
 ```

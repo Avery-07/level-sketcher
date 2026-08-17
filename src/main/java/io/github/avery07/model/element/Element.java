@@ -9,7 +9,7 @@ import io.github.avery07.model.Style;
  * hit-testing can switch exhaustively over the concrete kinds (spec §6.3). New vocabulary
  * (symbols, text, arrows, images) will extend the permitted set in later phases.
  */
-public sealed interface Element permits EditablePolygon, Circle, FreehandStroke {
+public sealed interface Element permits EditablePolygon, Circle, FreehandStroke, SymbolInstance {
 
     Style style();
 
