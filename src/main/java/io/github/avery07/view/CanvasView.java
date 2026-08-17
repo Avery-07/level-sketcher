@@ -3,6 +3,7 @@ package io.github.avery07.view;
 import io.github.avery07.command.AddElementCommand;
 import io.github.avery07.command.AddSheetCommand;
 import io.github.avery07.command.Command;
+import io.github.avery07.command.CompositeCommand;
 import io.github.avery07.command.MoveElementCommand;
 import io.github.avery07.command.RemoveElementCommand;
 import io.github.avery07.command.RemoveSheetCommand;
@@ -63,7 +64,8 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private static final double MIN_SHEET_SIZE = 20; // world units for a dragged sheet
     private static final double PASTE_OFFSET = 24;    // offset applied to a pasted copy
 
-    private enum Mode { NONE, PAN, SHEET, SHEET_CREATE, ELEMENT, ELEMENT_EDIT, TOOL }
+    private enum Mode { NONE, PAN, SHEET, SHEET_CREATE, ELEMENT, ELEMENT_EDIT, TOOL,
+        MULTI_ELEMENTS, MULTI_SHEETS }
 
     private final Document document;
     private final Viewport viewport = new Viewport();
@@ -93,6 +95,16 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private Vec2 createCurrentWorld;
     private boolean pendingSheetPlacement; // armed by the Add Sheet button
     private boolean armedStandardIfClick;  // a plain click while armed drops a standard sheet
+
+    // Multi-select (toggle button): click to accumulate, drag to move the whole set.
+    private boolean multiSelect;
+    private final List<Element> multiElements = new ArrayList<>();
+    private Sheet multiOwner;
+    private Vec2 multiLastLocal;
+    private double multiDx, multiDy;
+    private final List<Sheet> multiSheets = new ArrayList<>();
+    private final List<Sheet.State> multiSheetStart = new ArrayList<>();
+    private Vec2 multiPressWorld;
 
     public CanvasView(Document document) {
         this.document = document;
@@ -160,6 +172,12 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     // ----- other public actions -----
 
+    /** Toggle multi-select: while on, clicks accumulate a selection you can move/delete together. */
+    public void setMultiSelect(boolean on) {
+        multiSelect = on;
+        requestFocus();
+    }
+
     /** Arm sheet placement: the next click drops a standard sheet, a drag rubber-bands a sized one. */
     public void armAddSheet() {
         pendingSheetPlacement = true;
@@ -177,60 +195,94 @@ public final class CanvasView extends StackPane implements CanvasContext {
     public void deleteSelected() {
         inspector.hide();
         if (document.editorMode() == EditorMode.ASSEMBLY) {
-            Sheet s = document.selectedSheet();
-            if (s != null) {
-                execute(new RemoveSheetCommand(document.workspace(), s));
+            List<Sheet> sheets = new ArrayList<>(document.selectedSheets());
+            if (!sheets.isEmpty()) {
+                List<Command> cmds = new ArrayList<>();
+                for (Sheet s : sheets) {
+                    cmds.add(new RemoveSheetCommand(document.workspace(), s));
+                }
+                execute(new CompositeCommand("Delete", cmds));
                 document.clearSelection();
             }
         } else {
-            Element el = document.selectedElement();
             Sheet owner = document.selectedSheet();
-            if (el != null && owner != null) {
-                execute(new RemoveElementCommand(owner, el));
+            List<Element> els = new ArrayList<>(document.selectedElements());
+            if (owner != null && !els.isEmpty()) {
+                List<Command> cmds = new ArrayList<>();
+                for (Element el : els) {
+                    cmds.add(new RemoveElementCommand(owner, el));
+                }
+                execute(new CompositeCommand("Delete", cmds));
                 document.clearSelection();
             }
         }
     }
 
-    /** Copy the current selection: the selected element in Edition, the selected sheet in Assembly. */
+    /** Copy the current selection: elements in Edition, sheets in Assembly. */
     public void copySelection() {
         if (document.editorMode() == EditorMode.EDITION) {
-            Element el = document.selectedElement();
-            if (el != null) {
-                document.setClipboardElement(el.copy());
+            List<Element> copies = new ArrayList<>();
+            for (Element el : document.selectedElements()) {
+                copies.add(el.copy());
+            }
+            if (!copies.isEmpty()) {
+                document.setClipboardElements(copies);
             }
         } else {
-            Sheet s = document.selectedSheet();
-            if (s != null) {
-                document.setClipboardSheet(s.copy());
+            List<Sheet> copies = new ArrayList<>();
+            for (Sheet s : document.selectedSheets()) {
+                copies.add(s.copy());
+            }
+            if (!copies.isEmpty()) {
+                document.setClipboardSheets(copies);
             }
         }
     }
 
-    /** Paste the clipboard: a copied element into the current sheet, or a copied sheet, offset. */
+    /** Paste the clipboard: copied elements into the current sheet, or copied sheets, offset. */
     public void pasteClipboard() {
         if (document.editorMode() == EditorMode.EDITION) {
-            Element clip = document.clipboardElement();
             Sheet target = document.selectedSheet();
             if (target == null && !document.workspace().sheets().isEmpty()) {
                 target = document.workspace().sheets().get(document.workspace().sheets().size() - 1);
             }
-            if (clip == null || target == null) {
+            if (document.clipboardElements().isEmpty() || target == null) {
                 return;
             }
-            Element clone = clip.copy();
-            clone.translate(PASTE_OFFSET, PASTE_OFFSET);
-            execute(new AddElementCommand(target, clone));
-            document.selectElement(target, clone);
+            List<Command> cmds = new ArrayList<>();
+            List<Element> pasted = new ArrayList<>();
+            for (Element c : document.clipboardElements()) {
+                Element clone = c.copy();
+                clone.translate(PASTE_OFFSET, PASTE_OFFSET);
+                cmds.add(new AddElementCommand(target, clone));
+                pasted.add(clone);
+            }
+            execute(new CompositeCommand("Paste", cmds));
+            selectAll(target, pasted);
         } else {
-            Sheet clip = document.clipboardSheet();
-            if (clip == null) {
+            if (document.clipboardSheets().isEmpty()) {
                 return;
             }
-            Sheet clone = clip.copy();
-            clone.setCenter(new Vec2(clone.center().x() + PASTE_OFFSET, clone.center().y() + PASTE_OFFSET));
-            execute(new AddSheetCommand(document.workspace(), clone));
-            document.selectSheet(clone);
+            List<Command> cmds = new ArrayList<>();
+            List<Sheet> pasted = new ArrayList<>();
+            for (Sheet c : document.clipboardSheets()) {
+                Sheet clone = c.copy();
+                clone.setCenter(new Vec2(clone.center().x() + PASTE_OFFSET, clone.center().y() + PASTE_OFFSET));
+                cmds.add(new AddSheetCommand(document.workspace(), clone));
+                pasted.add(clone);
+            }
+            execute(new CompositeCommand("Paste", cmds));
+            document.selectSheet(pasted.get(0));
+            for (int i = 1; i < pasted.size(); i++) {
+                document.addSelectedSheet(pasted.get(i));
+            }
+        }
+    }
+
+    private void selectAll(Sheet owner, List<Element> elements) {
+        document.selectElement(owner, elements.get(0));
+        for (int i = 1; i < elements.size(); i++) {
+            document.addSelectedElement(owner, elements.get(i));
         }
     }
 
@@ -353,6 +405,22 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     /** Assembly mode: only sheets are interactive (select, move, resize/rotate/extend, rename). */
     private void pressAssembly(double sx, double sy, Vec2 world, MouseEvent e) {
+        if (multiSelect && !pendingSheetPlacement) {
+            Sheet owner = sheetUnderCursor(world, sx, sy);
+            if (owner == null) {
+                owner = sheetLabelAt(sx, sy);
+            }
+            if (owner != null) {
+                if (!document.selectedSheets().contains(owner)) {
+                    document.addSelectedSheet(owner);
+                }
+                beginMultiSheetMove(world);
+            } else {
+                document.clearSelection();
+                beginPan(sx, sy);
+            }
+            return;
+        }
         if (pendingSheetPlacement) {
             pendingSheetPlacement = false;
             document.clearSelection();
@@ -407,6 +475,20 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     /** Edition mode: only sheet content is interactive (draw, select/move/edit elements). */
     private void pressEdition(double sx, double sy, Vec2 world, MouseEvent e) {
+        if (multiSelect) {
+            Sheet owner = topmostAt(world);
+            Element shape = owner != null ? topmostElementIn(owner, world) : null;
+            if (shape != null) {
+                if (!document.selectedElements().contains(shape)) {
+                    document.addSelectedElement(owner, shape);
+                }
+                beginMultiElementMove(owner, world);
+            } else {
+                document.clearSelection();
+                beginPan(sx, sy);
+            }
+            return;
+        }
         if (activeTool != null && (activeTool.inProgress() || activeTool.overridesSelection())) {
             beginTool(e);
             return;
@@ -529,6 +611,14 @@ public final class CanvasView extends StackPane implements CanvasContext {
                 createCurrentWorld = worldOf(e.getX(), e.getY());
                 requestRender();
             }
+            case MULTI_ELEMENTS -> {
+                multiElementDrag(worldOf(e.getX(), e.getY()));
+                requestRender();
+            }
+            case MULTI_SHEETS -> {
+                multiSheetDrag(worldOf(e.getX(), e.getY()));
+                requestRender();
+            }
             default -> { }
         }
     }
@@ -567,6 +657,8 @@ public final class CanvasView extends StackPane implements CanvasContext {
                 }
             }
             case SHEET_CREATE -> finishSheetCreate();
+            case MULTI_ELEMENTS -> commitMultiElementMove();
+            case MULTI_SHEETS -> commitMultiSheetMove();
             default -> { }
         }
         mode = Mode.NONE;
@@ -723,6 +815,83 @@ public final class CanvasView extends StackPane implements CanvasContext {
         }
         movingElement = null;
         movingSheet = null;
+    }
+
+    // ----- multi-select move -----
+
+    private void beginMultiElementMove(Sheet owner, Vec2 world) {
+        multiOwner = owner;
+        multiElements.clear();
+        multiElements.addAll(document.selectedElements());
+        multiLastLocal = SheetGeometry.worldToLocal(owner, world);
+        multiDx = 0;
+        multiDy = 0;
+        mode = Mode.MULTI_ELEMENTS;
+    }
+
+    private void multiElementDrag(Vec2 world) {
+        Vec2 cur = SheetGeometry.worldToLocal(multiOwner, world);
+        if (cur == null || multiLastLocal == null) {
+            return;
+        }
+        double dx = cur.x() - multiLastLocal.x();
+        double dy = cur.y() - multiLastLocal.y();
+        for (Element el : multiElements) {
+            el.translate(dx, dy);
+        }
+        multiDx += dx;
+        multiDy += dy;
+        multiLastLocal = cur;
+    }
+
+    private void commitMultiElementMove() {
+        if ((multiDx != 0 || multiDy != 0) && !multiElements.isEmpty()) {
+            for (Element el : multiElements) {
+                el.translate(-multiDx, -multiDy);
+            }
+            List<Command> cmds = new ArrayList<>();
+            for (Element el : multiElements) {
+                cmds.add(new MoveElementCommand(el, multiDx, multiDy));
+            }
+            execute(new CompositeCommand("Move", cmds));
+        }
+        multiElements.clear();
+        multiOwner = null;
+    }
+
+    private void beginMultiSheetMove(Vec2 world) {
+        multiPressWorld = world;
+        multiSheets.clear();
+        multiSheets.addAll(document.selectedSheets());
+        multiSheetStart.clear();
+        for (Sheet s : multiSheets) {
+            multiSheetStart.add(s.capture());
+        }
+        mode = Mode.MULTI_SHEETS;
+    }
+
+    private void multiSheetDrag(Vec2 world) {
+        Vec2 delta = world.sub(multiPressWorld);
+        for (int i = 0; i < multiSheets.size(); i++) {
+            multiSheets.get(i).setCenter(multiSheetStart.get(i).center().add(delta));
+        }
+    }
+
+    private void commitMultiSheetMove() {
+        List<Command> cmds = new ArrayList<>();
+        for (int i = 0; i < multiSheets.size(); i++) {
+            Sheet s = multiSheets.get(i);
+            Sheet.State before = multiSheetStart.get(i);
+            Sheet.State after = s.capture();
+            if (!after.equals(before)) {
+                cmds.add(new SetSheetStateCommand(s, before, after));
+            }
+        }
+        if (!cmds.isEmpty()) {
+            execute(new CompositeCommand("Move sheets", cmds));
+        }
+        multiSheets.clear();
+        multiSheetStart.clear();
     }
 
     // ----- rename editor -----
@@ -902,13 +1071,13 @@ public final class CanvasView extends StackPane implements CanvasContext {
     }
 
     private void clearSelectionIfGone() {
-        Sheet s = document.selectedSheet();
-        if (s != null && !document.workspace().sheets().contains(s)) {
-            document.clearSelection();
-            return;
-        }
-        Element e = document.selectedElement();
-        if (e != null && s != null && s.layerOf(e) == null) {
+        var sheets = document.workspace().sheets();
+        boolean sheetGone = document.selectedSheets().stream().anyMatch(s -> !sheets.contains(s));
+        Sheet owner = document.selectedSheet();
+        boolean elementGone = owner != null
+                && document.selectedElements().stream().anyMatch(e -> owner.layerOf(e) == null);
+        if (sheetGone || elementGone || (owner != null && !sheets.contains(owner)
+                && !document.selectedElements().isEmpty())) {
             document.clearSelection();
         }
     }

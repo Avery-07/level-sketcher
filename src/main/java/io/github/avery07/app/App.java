@@ -57,6 +57,7 @@ public final class App extends Application {
     private CanvasView canvas;
     private Button modeButton;
     private ButtonBase addSheetButton;
+    private ToggleButton multiSelectButton;
 
     @Override
     public void start(Stage stage) {
@@ -94,6 +95,7 @@ public final class App extends Application {
             MenuItem item = new MenuItem(type.name());
             item.setOnAction(e -> {
                 setMode(EditorMode.EDITION);
+                turnOffMultiSelect();
                 toolGroup.selectToggle(null);
                 canvas.useSymbolTool(type);
             });
@@ -104,8 +106,8 @@ public final class App extends Application {
     }
 
     private VBox buildToolPalette() {
-        VBox palette = new VBox(10, buildModeButton(), buildToolColumns(), buildEditRow(),
-                grow(), buildStyleControls());
+        VBox palette = new VBox(10, buildModeButton(), buildToolColumns(), buildMultiSelectButton(),
+                buildEditRow(), grow(), buildStyleControls());
         palette.getStyleClass().add("tool-palette");
         palette.setPadding(new Insets(8));
         return palette;
@@ -138,6 +140,28 @@ public final class App extends Application {
         HBox.setHgrow(sheetColumn, Priority.ALWAYS);
         HBox.setHgrow(drawColumn, Priority.ALWAYS);
         return new HBox(4, sheetColumn, drawColumn);
+    }
+
+    private Node buildMultiSelectButton() {
+        multiSelectButton = new ToggleButton("Multi-select");
+        multiSelectButton.setMaxWidth(Double.MAX_VALUE);
+        multiSelectButton.setTooltip(new Tooltip("Select multiple objects — click to add, drag to move together"));
+        multiSelectButton.setOnAction(e -> {
+            boolean on = multiSelectButton.isSelected();
+            if (on) {
+                toolGroup.selectToggle(null);
+                canvas.clearTool();
+            }
+            canvas.setMultiSelect(on);
+        });
+        return multiSelectButton;
+    }
+
+    private void turnOffMultiSelect() {
+        if (multiSelectButton.isSelected()) {
+            multiSelectButton.setSelected(false);
+        }
+        canvas.setMultiSelect(false);
     }
 
     private Node buildEditRow() {
@@ -184,6 +208,7 @@ public final class App extends Application {
         button.setTooltip(new Tooltip(name + "  (" + shortcut + ")"));
         button.setOnAction(e -> {
             if (button.isSelected()) {
+                turnOffMultiSelect();
                 activate.run();
             } else {
                 canvas.clearTool();
@@ -252,6 +277,7 @@ public final class App extends Application {
             ToggleButton button = toolKeys.get(e.getCode());
             if (button != null) {
                 if (!button.isSelected()) {
+                    turnOffMultiSelect();
                     button.setSelected(true);
                     toolActivations.get(e.getCode()).run();
                 }

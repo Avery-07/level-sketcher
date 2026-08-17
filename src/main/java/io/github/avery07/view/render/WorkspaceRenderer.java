@@ -70,23 +70,27 @@ public final class WorkspaceRenderer {
         g.setTransform(1, 0, 0, 1, 0, 0);
         g.clearRect(0, 0, w, h);
 
-        Sheet selectedSheet = document.selectedSheet();
+        Sheet owner = document.selectedSheet();
         if (document.editorMode() == EditorMode.ASSEMBLY) {
             // Sheets are the interactive objects: show selection + hover grab handles.
             Sheet hovered = document.hoveredSheet();
-            if (hovered != null && hovered != selectedSheet) {
+            if (hovered != null && !document.selectedSheets().contains(hovered)) {
                 drawSheetHandles(g, hovered);
             }
-            if (selectedSheet != null) {
-                drawSheetOutline(g, selectedSheet);
-                drawSheetHandles(g, selectedSheet);
+            for (Sheet s : document.selectedSheets()) {
+                drawSheetOutline(g, s);
             }
-        } else {
-            // Edition: only the selected element's highlight + edit handles.
-            Element el = document.selectedElement();
-            if (el != null && selectedSheet != null) {
-                drawElementHighlight(g, selectedSheet, el);
-                drawElementHandles(g, selectedSheet, el);
+            if (document.selectedSheets().size() == 1) {
+                drawSheetHandles(g, document.selectedSheets().get(0));
+            }
+        } else if (owner != null) {
+            // Edition: highlight every selected element; edit handles only when exactly one.
+            for (Element el : document.selectedElements()) {
+                drawElementHighlight(g, owner, el);
+            }
+            Element single = document.selectedElement();
+            if (single != null) {
+                drawElementHandles(g, owner, single);
             }
         }
     }

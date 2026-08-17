@@ -29,11 +29,12 @@ public final class Document {
     private final UndoManager undoManager = new UndoManager();
     private final List<ChangeListener> listeners = new ArrayList<>();
 
-    private Sheet selectedSheet;
-    private Element selectedElement;
+    private Sheet selectedSheet;  // owner of selected elements, or the primary selected sheet
+    private final List<Element> selectedElements = new ArrayList<>();
+    private final List<Sheet> selectedSheets = new ArrayList<>();
     private Sheet hoveredSheet;   // transient UI hover, not part of the document
-    private Element clipboardElement; // in-app copy/paste
-    private Sheet clipboardSheet;
+    private final List<Element> clipboardElements = new ArrayList<>(); // in-app copy/paste
+    private final List<Sheet> clipboardSheets = new ArrayList<>();
     private Style currentStyle = Style.DEFAULT; // style applied to newly drawn shapes
     private EditorMode editorMode = EditorMode.ASSEMBLY;
     private Path file;      // null until first save
@@ -48,7 +49,8 @@ public final class Document {
         if (this.editorMode != mode) {
             this.editorMode = mode;
             selectedSheet = null;
-            selectedElement = null;
+            selectedElements.clear();
+            selectedSheets.clear();
             fireChanged();
         }
     }
@@ -69,20 +71,22 @@ public final class Document {
         return symbolLibrary;
     }
 
-    public Element clipboardElement() {
-        return clipboardElement;
+    public List<Element> clipboardElements() {
+        return clipboardElements;
     }
 
-    public void setClipboardElement(Element element) {
-        this.clipboardElement = element;
+    public void setClipboardElements(List<Element> elements) {
+        clipboardElements.clear();
+        clipboardElements.addAll(elements);
     }
 
-    public Sheet clipboardSheet() {
-        return clipboardSheet;
+    public List<Sheet> clipboardSheets() {
+        return clipboardSheets;
     }
 
-    public void setClipboardSheet(Sheet sheet) {
-        this.clipboardSheet = sheet;
+    public void setClipboardSheets(List<Sheet> sheets) {
+        clipboardSheets.clear();
+        clipboardSheets.addAll(sheets);
     }
 
     public UndoManager undoManager() {
@@ -93,30 +97,69 @@ public final class Document {
         return selectedSheet;
     }
 
+    /** The single selected element (for the inspector and edit handles), or null if 0 or many. */
     public Element selectedElement() {
-        return selectedElement;
+        return selectedElements.size() == 1 ? selectedElements.get(0) : null;
     }
 
-    /** Select a sheet (clearing any element selection). */
+    /** Live list of selected elements (all within {@link #selectedSheet()}). */
+    public List<Element> selectedElements() {
+        return selectedElements;
+    }
+
+    /** Live list of selected sheets (Assembly). */
+    public List<Sheet> selectedSheets() {
+        return selectedSheets;
+    }
+
+    /** Select a single sheet (clearing any element selection). */
     public void selectSheet(Sheet sheet) {
-        if (selectedSheet != sheet || selectedElement != null) {
-            selectedSheet = sheet;
-            selectedElement = null;
-            fireChanged();
+        selectedSheet = sheet;
+        selectedSheets.clear();
+        if (sheet != null) {
+            selectedSheets.add(sheet);
         }
+        selectedElements.clear();
+        fireChanged();
     }
 
-    /** Select an element together with its owning sheet. */
+    /** Add a sheet to the multi-selection (Assembly). */
+    public void addSelectedSheet(Sheet sheet) {
+        selectedElements.clear();
+        if (!selectedSheets.contains(sheet)) {
+            selectedSheets.add(sheet);
+        }
+        selectedSheet = selectedSheets.size() == 1 ? selectedSheets.get(0) : null;
+        fireChanged();
+    }
+
+    /** Select a single element together with its owning sheet. */
     public void selectElement(Sheet owner, Element element) {
         selectedSheet = owner;
-        selectedElement = element;
+        selectedElements.clear();
+        selectedElements.add(element);
+        selectedSheets.clear();
+        fireChanged();
+    }
+
+    /** Add an element to the multi-selection (all elements share one owner sheet). */
+    public void addSelectedElement(Sheet owner, Element element) {
+        if (selectedSheet != owner) {
+            selectedSheet = owner;
+            selectedElements.clear();
+        }
+        if (!selectedElements.contains(element)) {
+            selectedElements.add(element);
+        }
+        selectedSheets.clear();
         fireChanged();
     }
 
     public void clearSelection() {
-        if (selectedSheet != null || selectedElement != null) {
+        if (selectedSheet != null || !selectedElements.isEmpty() || !selectedSheets.isEmpty()) {
             selectedSheet = null;
-            selectedElement = null;
+            selectedElements.clear();
+            selectedSheets.clear();
             fireChanged();
         }
     }
