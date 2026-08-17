@@ -44,9 +44,16 @@
     -fx-text-fill: -accent;
 }
 
-.mode-segment {
-    -fx-spacing: 4;
-    -fx-padding: 0 0 2 0;
+.mode-button {
+    -fx-background-color: #eef0f3;
+    -fx-font-weight: bold;
+    -fx-text-fill: #2f3136;
+    -fx-background-radius: 8;
+    -fx-padding: 7 10 7 10;
+}
+
+.mode-button:hover {
+    -fx-background-color: #e2e5ea;
 }
 
 .tool-icon {
