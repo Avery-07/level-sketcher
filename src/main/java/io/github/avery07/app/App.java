@@ -4,6 +4,7 @@ import io.github.avery07.document.Document;
 import io.github.avery07.document.EditorMode;
 import io.github.avery07.model.Style;
 import io.github.avery07.persistence.ProjectIo;
+import io.github.avery07.persistence.SvgExporter;
 import io.github.avery07.ui.Colors;
 import io.github.avery07.ui.Icons;
 import io.github.avery07.view.CanvasView;
@@ -105,8 +106,11 @@ public final class App extends Application {
         MenuItem open = menuItem("Open…", "Shortcut+O", this::openFile);
         MenuItem save = menuItem("Save", "Shortcut+S", this::saveFile);
         MenuItem saveAs = menuItem("Save As…", "Shortcut+Shift+S", this::saveFileAs);
-        MenuItem exportPng = menuItem("Export Image…", null, this::exportImage);
-        file.getItems().addAll(open, save, saveAs, new SeparatorMenuItem(), exportPng);
+        MenuItem exportPng = menuItem("Export Image (PNG)…", null, this::exportImage);
+        MenuItem exportSvg = menuItem("Export SVG…", null, this::exportSvg);
+        MenuItem exportJson = menuItem("Export JSON…", null, this::exportJson);
+        file.getItems().addAll(open, save, saveAs, new SeparatorMenuItem(),
+                exportPng, exportSvg, exportJson);
 
         Menu systems = new Menu("Systems");
         for (io.github.avery07.model.symbol.SymbolType type : document.symbolLibrary().types()) {
@@ -361,11 +365,7 @@ public final class App extends Application {
     }
 
     private void exportImage() {
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle("Export Image");
-        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG image", "*.png"));
-        chooser.setInitialFileName("sketch.png");
-        File file = chooser.showSaveDialog(stage);
+        File file = chooseSave("Export Image", "PNG image", "*.png", "sketch.png");
         if (file == null) {
             return;
         }
@@ -374,6 +374,38 @@ public final class App extends Application {
         } catch (IOException ex) {
             error("Could not export the image", ex);
         }
+    }
+
+    private void exportSvg() {
+        File file = chooseSave("Export SVG", "SVG image", "*.svg", "sketch.svg");
+        if (file == null) {
+            return;
+        }
+        try {
+            java.nio.file.Files.writeString(file.toPath(), SvgExporter.export(document));
+        } catch (IOException ex) {
+            error("Could not export the SVG", ex);
+        }
+    }
+
+    private void exportJson() {
+        File file = chooseSave("Export JSON", "JSON", "*.json", "sketch.json");
+        if (file == null) {
+            return;
+        }
+        try {
+            ProjectIo.save(document, file.toPath()); // structured export; doesn't change the current file
+        } catch (IOException ex) {
+            error("Could not export the JSON", ex);
+        }
+    }
+
+    private File chooseSave(String title, String desc, String ext, String initial) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle(title);
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(desc, ext));
+        chooser.setInitialFileName(initial);
+        return chooser.showSaveDialog(stage);
     }
 
     private FileChooser projectChooser(String title) {
