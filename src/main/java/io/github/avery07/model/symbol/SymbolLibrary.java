@@ -18,6 +18,16 @@ public final class SymbolLibrary {
         return types;
     }
 
+    /** The type with the given id, or {@code null} if none. */
+    public SymbolType byId(String id) {
+        for (SymbolType t : types) {
+            if (t.id().equals(id)) {
+                return t;
+            }
+        }
+        return null;
+    }
+
     /** The four default types, one per placement pattern. */
     public static SymbolLibrary builtIn() {
         return new SymbolLibrary(List.of(

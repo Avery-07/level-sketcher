@@ -50,7 +50,7 @@ io.github.avery07
 ├── tool/       Tool + CanvasContext (decoupling boundary), PointerInput/KeyInput,
 │   │           Rectangle/Circle/Polygon/Freehand/Eraser + SymbolTool (gestures)
 ├── ui/         Toolbar, Inspector, LayerPanel, SymbolLibraryPanel, MenuBar
-└── io/         Jackson serialization, save/load, image + JSON/SVG export
+└── persistence/ ProjectIo — native JSON save/load (PNG export in the app shell)
 ```
 
 **Invariant:** `model/` never imports JavaFX — keeps the domain testable and

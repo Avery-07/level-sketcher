@@ -346,6 +346,34 @@ public final class CanvasView extends StackPane implements CanvasContext {
         document.markDirty();
     }
 
+    /** Zoom/pan so every sheet is visible (used after opening a file). */
+    public void frameContent() {
+        var sheets = document.workspace().sheets();
+        if (sheets.isEmpty()) {
+            return;
+        }
+        double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE;
+        double maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+        for (Sheet s : sheets) {
+            double[][] corners = {{s.left(), s.top()}, {s.right(), s.top()},
+                    {s.right(), s.bottom()}, {s.left(), s.bottom()}};
+            for (double[] c : corners) {
+                Vec2 w = SheetGeometry.localToWorld(s, c[0], c[1]);
+                minX = Math.min(minX, w.x());
+                minY = Math.min(minY, w.y());
+                maxX = Math.max(maxX, w.x());
+                maxY = Math.max(maxY, w.y());
+            }
+        }
+        viewport.frame(minX, minY, maxX, maxY, getWidth(), getHeight());
+        requestRender();
+    }
+
+    /** A snapshot of the current canvas content (sheets + elements), for PNG export. */
+    public javafx.scene.image.WritableImage snapshotContent() {
+        return content.snapshot(new javafx.scene.SnapshotParameters(), null);
+    }
+
     @Override
     public void requestRender() {
         renderer.renderContent(content.getGraphicsContext2D(), content.getWidth(), content.getHeight());

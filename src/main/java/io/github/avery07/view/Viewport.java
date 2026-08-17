@@ -61,6 +61,15 @@ public final class Viewport {
         return a;
     }
 
+    /** Zoom and pan so the given world rectangle fits centred in a view of the given size. */
+    public void frame(double minX, double minY, double maxX, double maxY, double viewW, double viewH) {
+        double bw = Math.max(1, maxX - minX);
+        double bh = Math.max(1, maxY - minY);
+        zoom = clamp(Math.min(viewW / (bw * 1.15), viewH / (bh * 1.15)), MIN_ZOOM, MAX_ZOOM);
+        panX = viewW / 2 - (minX + maxX) / 2 * zoom;
+        panY = viewH / 2 - (minY + maxY) / 2 * zoom;
+    }
+
     private static double clamp(double v, double lo, double hi) {
         return Math.max(lo, Math.min(hi, v));
     }

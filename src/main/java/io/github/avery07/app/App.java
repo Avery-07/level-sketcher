@@ -3,21 +3,26 @@ package io.github.avery07.app;
 import io.github.avery07.document.Document;
 import io.github.avery07.document.EditorMode;
 import io.github.avery07.model.Style;
+import io.github.avery07.persistence.ProjectIo;
 import io.github.avery07.ui.Colors;
 import io.github.avery07.ui.Icons;
 import io.github.avery07.view.CanvasView;
 import javafx.application.Application;
+import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.Scene;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBase;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextInputControl;
@@ -25,6 +30,7 @@ import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
@@ -32,8 +38,13 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
+import javax.imageio.ImageIO;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -54,6 +65,7 @@ public final class App extends Application {
     private final Map<KeyCode, Runnable> toolActivations = new HashMap<>();
     private final List<ButtonBase> drawButtons = new ArrayList<>();
 
+    private Stage stage;
     private CanvasView canvas;
     private Button modeButton;
     private ButtonBase addSheetButton;
@@ -61,6 +73,7 @@ public final class App extends Application {
 
     @Override
     public void start(Stage stage) {
+        this.stage = stage;
         canvas = new CanvasView(document);
 
         BorderPane root = new BorderPane();
@@ -81,6 +94,7 @@ public final class App extends Application {
         stage.setScene(scene);
         stage.setTitle(titleFor(document));
         document.addChangeListener(() -> stage.setTitle(titleFor(document)));
+        stage.setOnCloseRequest(this::confirmClose);
         stage.show();
         canvas.requestFocus();
         canvas.requestRender();
@@ -88,7 +102,11 @@ public final class App extends Application {
 
     private MenuBar buildMenuBar() {
         Menu file = new Menu("File");
-        file.getItems().addAll(disabled("Open…"), disabled("Save"), disabled("Save As…"), disabled("Export…"));
+        MenuItem open = menuItem("Open…", "Shortcut+O", this::openFile);
+        MenuItem save = menuItem("Save", "Shortcut+S", this::saveFile);
+        MenuItem saveAs = menuItem("Save As…", "Shortcut+Shift+S", this::saveFileAs);
+        MenuItem exportPng = menuItem("Export Image…", null, this::exportImage);
+        file.getItems().addAll(open, save, saveAs, new SeparatorMenuItem(), exportPng);
 
         Menu systems = new Menu("Systems");
         for (io.github.avery07.model.symbol.SymbolType type : document.symbolLibrary().types()) {
@@ -286,10 +304,108 @@ public final class App extends Application {
         });
     }
 
-    private MenuItem disabled(String text) {
+    private MenuItem menuItem(String text, String accelerator, Runnable action) {
         MenuItem item = new MenuItem(text);
-        item.setDisable(true);
+        item.setOnAction(e -> action.run());
+        if (accelerator != null) {
+            item.setAccelerator(KeyCombination.keyCombination(accelerator));
+        }
         return item;
+    }
+
+    // ----- file actions -----
+
+    private void openFile() {
+        File file = projectChooser("Open Project").showOpenDialog(stage);
+        if (file == null) {
+            return;
+        }
+        try {
+            ProjectIo.load(file.toPath(), document);
+            document.undoManager().clear();
+            document.clearSelection();
+            document.setFile(file.toPath());
+            document.markClean();
+            canvas.frameContent();
+        } catch (IOException | RuntimeException ex) {
+            error("Could not open the file", ex);
+        }
+    }
+
+    private void saveFile() {
+        Path file = document.file();
+        if (file == null) {
+            saveFileAs();
+            return;
+        }
+        writeProject(file);
+    }
+
+    private void saveFileAs() {
+        FileChooser chooser = projectChooser("Save Project");
+        chooser.setInitialFileName("untitled.lsk");
+        File file = chooser.showSaveDialog(stage);
+        if (file != null) {
+            writeProject(file.toPath());
+        }
+    }
+
+    private void writeProject(Path path) {
+        try {
+            ProjectIo.save(document, path);
+            document.setFile(path);
+            document.markClean();
+        } catch (IOException ex) {
+            error("Could not save the file", ex);
+        }
+    }
+
+    private void exportImage() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Export Image");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG image", "*.png"));
+        chooser.setInitialFileName("sketch.png");
+        File file = chooser.showSaveDialog(stage);
+        if (file == null) {
+            return;
+        }
+        try {
+            ImageIO.write(SwingFXUtils.fromFXImage(canvas.snapshotContent(), null), "png", file);
+        } catch (IOException ex) {
+            error("Could not export the image", ex);
+        }
+    }
+
+    private FileChooser projectChooser(String title) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle(title);
+        chooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter("LevelSketcher project", "*.lsk"));
+        return chooser;
+    }
+
+    private void confirmClose(javafx.stage.WindowEvent e) {
+        if (!document.isDirty()) {
+            return;
+        }
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Save changes before closing?",
+                ButtonType.YES, ButtonType.NO, ButtonType.CANCEL);
+        alert.setHeaderText(null);
+        var result = alert.showAndWait();
+        if (result.isEmpty() || result.get() == ButtonType.CANCEL) {
+            e.consume();
+        } else if (result.get() == ButtonType.YES) {
+            saveFile();
+            if (document.isDirty()) {
+                e.consume(); // save was cancelled or failed — don't close
+            }
+        }
+    }
+
+    private void error(String message, Throwable ex) {
+        Alert alert = new Alert(Alert.AlertType.ERROR, message + ":\n" + ex.getMessage());
+        alert.setHeaderText(null);
+        alert.showAndWait();
     }
 
     private Region grow() {
