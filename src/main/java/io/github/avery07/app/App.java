@@ -4,19 +4,19 @@ import io.github.avery07.document.Document;
 import io.github.avery07.model.Style;
 import io.github.avery07.ui.Colors;
 import io.github.avery07.ui.Icons;
-import io.github.avery07.ui.LayersPanel;
 import io.github.avery07.view.CanvasView;
 import javafx.application.Application;
 import javafx.geometry.Insets;
-import javafx.geometry.Orientation;
-import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.Label;
-import javafx.scene.control.Separator;
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuBar;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextInputControl;
@@ -29,6 +29,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 
@@ -36,12 +37,15 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * The JavaFX application shell: builds the main window (toolbar + canvas + layers panel), owns
- * the top-level {@link Document}, applies the stylesheet, and wires tool keyboard shortcuts.
+ * The JavaFX application shell: a top menu bar (File/Edit/Systems), a left two-column tool
+ * palette (sheet actions | drawing tools), and the canvas. Owns the top-level {@link Document},
+ * applies the stylesheet, and wires tool keyboard shortcuts. Object properties and a sheet's
+ * layers are reached by right-clicking (see {@code InspectorPopup}).
  */
 public final class App extends Application {
 
     private static final String APP_NAME = "LevelSketcher";
+    private static final double TOOL_BTN_WIDTH = 42;
 
     private final Document document = new Document();
     private final ToggleGroup toolGroup = new ToggleGroup();
@@ -55,9 +59,9 @@ public final class App extends Application {
         canvas = new CanvasView(document);
 
         BorderPane root = new BorderPane();
-        root.setTop(buildToolBar());
+        root.setTop(buildMenuBar());
+        root.setLeft(buildToolPalette());
         root.setCenter(canvas);
-        root.setRight(new LayersPanel(document));
 
         Scene scene = new Scene(root, 1320, 820);
         var css = App.class.getResource("/style.css");
@@ -74,42 +78,62 @@ public final class App extends Application {
         canvas.requestRender();
     }
 
-    private HBox buildToolBar() {
-        HBox bar = new HBox();
-        bar.getStyleClass().add("tool-bar");
-        bar.setAlignment(Pos.CENTER_LEFT);
+    private MenuBar buildMenuBar() {
+        Menu file = new Menu("File");
+        file.getItems().addAll(
+                menuItem("New Sheet", canvas::addSheetAtCenter),
+                new SeparatorMenuItem(),
+                disabled("Open…"), disabled("Save"), disabled("Save As…"), disabled("Export…"));
 
-        ToggleButton rectangle = toolButton(Icons.rectangle(), "Rectangle", "R", KeyCode.R, canvas::useRectangleTool);
-        ToggleButton circle = toolButton(Icons.circle(), "Circle", "O", KeyCode.O, canvas::useCircleTool);
-        ToggleButton polygon = toolButton(Icons.polygon(), "Polygon", "P", KeyCode.P, canvas::usePolygonTool);
-        ToggleButton freehand = toolButton(Icons.freehand(), "Freehand", "D", KeyCode.D, canvas::useFreehandTool);
-        ToggleButton erase = toolButton(Icons.eraser(), "Erase", "E", KeyCode.E, canvas::useEraserTool);
+        Menu edit = new Menu("Edit");
+        edit.getItems().addAll(
+                menuItem("Undo", canvas::undo),
+                menuItem("Redo", canvas::redo),
+                new SeparatorMenuItem(),
+                menuItem("Delete", canvas::deleteSelected));
 
-        Button addSheet = textButton("+ Sheet", "Add a sheet", canvas::addSheetAtCenter);
-        Button undo = glyphButton("↶", "Undo (Ctrl+Z)", canvas::undo);
-        Button redo = glyphButton("↷", "Redo (Ctrl+Y)", canvas::redo);
-        Button delete = textButton("Delete", "Delete selection (Del)", canvas::deleteSelected);
+        Menu systems = new Menu("Systems");
+        systems.getItems().add(disabled("Symbol Library… (coming soon)"));
+
+        return new MenuBar(file, edit, systems);
+    }
+
+    private VBox buildToolPalette() {
+        VBox sheetColumn = new VBox(4,
+                actionButton(Icons.addSheet(), "Add a sheet", canvas::addSheetAtCenter),
+                actionButton(Icons.trash(), "Delete selection (Del)", canvas::deleteSelected));
+
+        VBox drawColumn = new VBox(4,
+                toolButton(Icons.rectangle(), "Rectangle", "R", KeyCode.R, canvas::useRectangleTool),
+                toolButton(Icons.circle(), "Circle", "O", KeyCode.O, canvas::useCircleTool),
+                toolButton(Icons.polygon(), "Polygon", "P", KeyCode.P, canvas::usePolygonTool),
+                toolButton(Icons.freehand(), "Freehand", "D", KeyCode.D, canvas::useFreehandTool),
+                toolButton(Icons.eraser(), "Erase", "E", KeyCode.E, canvas::useEraserTool));
+
+        HBox columns = new HBox(4, sheetColumn, drawColumn);
 
         Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
+        VBox.setVgrow(spacer, Priority.ALWAYS);
 
-        bar.getChildren().addAll(rectangle, circle, polygon, freehand, erase,
-                sep(), addSheet, undo, redo, delete,
-                spacer, buildStyleControls());
-        return bar;
+        VBox palette = new VBox(10, columns, spacer, buildStyleControls());
+        palette.getStyleClass().add("tool-palette");
+        palette.setPadding(new Insets(8));
+        return palette;
     }
 
     /** The "current draw style" controls: what newly drawn shapes inherit. */
     private Node buildStyleControls() {
         Style style = document.currentStyle();
         ColorPicker stroke = new ColorPicker(Color.web(style.stroke()));
+        stroke.setMaxWidth(Double.MAX_VALUE);
         CheckBox fillOn = new CheckBox("Fill");
         fillOn.setSelected(style.fill() != null);
         ColorPicker fill = new ColorPicker(style.fill() != null ? Color.web(style.fill()) : Color.web("#cfe0ff"));
+        fill.setMaxWidth(Double.MAX_VALUE);
         Spinner<Double> width = new Spinner<>();
         width.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(0.5, 20, style.strokeWidth(), 0.5));
         width.setEditable(true);
-        width.setPrefWidth(72);
+        width.setMaxWidth(Double.MAX_VALUE);
 
         Runnable apply = () -> document.setCurrentStyle(new Style(
                 Colors.toHex(stroke.getValue()),
@@ -122,14 +146,13 @@ public final class App extends Application {
 
         Label caption = new Label("New shape");
         caption.getStyleClass().add("toolbar-caption");
-        HBox box = new HBox(4, caption, stroke, fillOn, fill, width);
-        box.setAlignment(Pos.CENTER_LEFT);
-        return box;
+        return new VBox(4, caption, new Label("Stroke"), stroke, fillOn, fill, new Label("Width"), width);
     }
 
     private ToggleButton toolButton(Node icon, String name, String shortcut, KeyCode key, Runnable activate) {
         ToggleButton button = new ToggleButton();
         button.setGraphic(icon);
+        button.setPrefWidth(TOOL_BTN_WIDTH);
         button.setToggleGroup(toolGroup);
         button.setTooltip(new Tooltip(name + "  (" + shortcut + ")"));
         button.setOnAction(e -> {
@@ -142,6 +165,27 @@ public final class App extends Application {
         toolKeys.put(key, button);
         toolActivations.put(key, activate);
         return button;
+    }
+
+    private Button actionButton(Node icon, String tip, Runnable action) {
+        Button button = new Button();
+        button.setGraphic(icon);
+        button.setPrefWidth(TOOL_BTN_WIDTH);
+        button.setTooltip(new Tooltip(tip));
+        button.setOnAction(e -> action.run());
+        return button;
+    }
+
+    private MenuItem menuItem(String text, Runnable action) {
+        MenuItem item = new MenuItem(text);
+        item.setOnAction(e -> action.run());
+        return item;
+    }
+
+    private MenuItem disabled(String text) {
+        MenuItem item = new MenuItem(text);
+        item.setDisable(true);
+        return item;
     }
 
     private void installShortcuts(Scene scene) {
@@ -164,26 +208,6 @@ public final class App extends Application {
                 e.consume();
             }
         });
-    }
-
-    private Button textButton(String text, String tip, Runnable action) {
-        Button b = new Button(text);
-        b.setTooltip(new Tooltip(tip));
-        b.setOnAction(e -> action.run());
-        return b;
-    }
-
-    private Button glyphButton(String glyph, String tip, Runnable action) {
-        Button b = new Button(glyph);
-        b.setTooltip(new Tooltip(tip));
-        b.setOnAction(e -> action.run());
-        return b;
-    }
-
-    private Separator sep() {
-        Separator s = new Separator(Orientation.VERTICAL);
-        s.setPadding(new Insets(0, 4, 0, 4));
-        return s;
     }
 
     /** Window title with the unsaved-changes indicator (spec §7.9). */

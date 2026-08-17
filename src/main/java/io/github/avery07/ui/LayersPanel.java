@@ -31,10 +31,17 @@ public final class LayersPanel extends VBox {
     private String lastSignature = "";
 
     public LayersPanel(Document document) {
+        this(document, false);
+    }
+
+    /** {@code embedded} drops the side-panel chrome so the panel can sit inside the popup. */
+    public LayersPanel(Document document, boolean embedded) {
         this.document = document;
-        getStyleClass().add("side-panel");
+        if (!embedded) {
+            getStyleClass().add("side-panel");
+        }
         setSpacing(6);
-        setPadding(new Insets(10));
+        setPadding(embedded ? new Insets(0) : new Insets(10));
         setPrefWidth(200);
         setMinWidth(200);
         document.addChangeListener(this::onDocumentChanged);

@@ -43,6 +43,20 @@ public final class Icons {
         return styled(p);
     }
 
+    public static Node addSheet() {
+        SVGPath p = new SVGPath();
+        // A sheet outline with a plus in the middle.
+        p.setContent("M3,2 L13,2 L13,14 L3,14 Z M8,5 L8,11 M5,8 L11,8");
+        return styled(p);
+    }
+
+    public static Node trash() {
+        SVGPath p = new SVGPath();
+        p.setContent("M3,4 L13,4 M6.5,4 L6.5,2.5 L9.5,2.5 L9.5,4 "
+                + "M4.5,4 L5.3,14 L10.7,14 L11.5,4 M6.5,6.5 L6.5,12 M9.5,6.5 L9.5,12");
+        return styled(p);
+    }
+
     private static Node styled(Node shape) {
         shape.getStyleClass().add("tool-icon");
         return shape;

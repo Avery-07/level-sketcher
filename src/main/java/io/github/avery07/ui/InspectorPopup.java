@@ -14,6 +14,7 @@ import javafx.scene.Node;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.Separator;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
@@ -34,15 +35,21 @@ public final class InspectorPopup {
     private final Document document;
     private final Popup popup = new Popup();
     private final VBox content = new VBox(8);
+    private final LayersPanel layers;
 
     public InspectorPopup(Document document) {
         this.document = document;
+        this.layers = new LayersPanel(document, true);
         content.setPadding(new Insets(10));
         content.setMinWidth(190);
         content.setStyle("-fx-background-color: white;"
                 + "-fx-border-color: #8a8a8a; -fx-border-width: 1;"
                 + "-fx-background-radius: 5; -fx-border-radius: 5;");
         content.setEffect(new DropShadow(8, Color.rgb(0, 0, 0, 0.35)));
+        var css = InspectorPopup.class.getResource("/style.css");
+        if (css != null) {
+            content.getStylesheets().add(css.toExternalForm());
+        }
         content.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
             if (e.getCode() == KeyCode.ESCAPE) {
                 hide();
@@ -128,8 +135,7 @@ public final class InspectorPopup {
                 document.markDirty();
             }
         });
-        content.getChildren().addAll(labeled("Name", name),
-                new Label(String.format("Size: %.0f × %.0f", sheet.width(), sheet.height())));
+        content.getChildren().addAll(labeled("Name", name), new Separator(), layers);
     }
 
     private static String typeName(Element e) {
