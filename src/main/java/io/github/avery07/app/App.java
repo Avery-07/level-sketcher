@@ -3,10 +3,12 @@ package io.github.avery07.app;
 import io.github.avery07.document.Document;
 import io.github.avery07.document.EditorMode;
 import io.github.avery07.model.Style;
+import io.github.avery07.app.KeyBindings.Action;
 import io.github.avery07.persistence.ProjectIo;
 import io.github.avery07.persistence.SvgExporter;
 import io.github.avery07.ui.Colors;
 import io.github.avery07.ui.Icons;
+import io.github.avery07.ui.ShortcutsDialog;
 import io.github.avery07.view.CanvasView;
 import javafx.application.Application;
 import javafx.embed.swing.SwingFXUtils;
@@ -30,7 +32,6 @@ import javafx.scene.control.TextInputControl;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
-import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.BorderPane;
@@ -47,7 +48,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
@@ -62,8 +63,9 @@ public final class App extends Application {
 
     private final Document document = new Document();
     private final ToggleGroup toolGroup = new ToggleGroup();
-    private final Map<KeyCode, ToggleButton> toolKeys = new HashMap<>();
-    private final Map<KeyCode, Runnable> toolActivations = new HashMap<>();
+    private final KeyBindings bindings = new KeyBindings();
+    private final Map<Action, ToggleButton> actionButtons = new EnumMap<>(Action.class);
+    private final Map<Action, Runnable> actionRunnables = new EnumMap<>(Action.class);
     private final List<ButtonBase> drawButtons = new ArrayList<>();
 
     private Stage stage;
@@ -90,6 +92,8 @@ public final class App extends Application {
             scene.getStylesheets().add(css.toExternalForm());
         }
         installShortcuts(scene);
+        bindings.addListener(this::refreshShortcutHints);
+        refreshShortcutHints();
 
         document.addChangeListener(this::syncModeUi);
         syncModeUi();
@@ -127,7 +131,12 @@ public final class App extends Application {
             systems.getItems().add(item);
         }
 
-        return new MenuBar(file, systems);
+        Menu settings = new Menu("Settings");
+        MenuItem shortcuts = menuItem("Keyboard Shortcuts…", null,
+                () -> ShortcutsDialog.show(stage, bindings));
+        settings.getItems().add(shortcuts);
+
+        return new MenuBar(file, systems, settings);
     }
 
     private VBox buildToolPalette() {
@@ -142,7 +151,6 @@ public final class App extends Application {
         modeButton = new Button();
         modeButton.setMaxWidth(Double.MAX_VALUE);
         modeButton.getStyleClass().add("mode-button");
-        modeButton.setTooltip(new Tooltip("Switch Assembly / Edition (Tab)"));
         modeButton.setOnAction(e -> setMode(document.editorMode() == EditorMode.ASSEMBLY
                 ? EditorMode.EDITION : EditorMode.ASSEMBLY));
         return modeButton;
@@ -154,12 +162,12 @@ public final class App extends Application {
                 actionButton(Icons.trash(), "Delete selection (Del)", canvas::deleteSelected));
 
         VBox drawColumn = new VBox(4,
-                toolButton(Icons.rectangle(), "Rectangle", "R", KeyCode.R, canvas::useRectangleTool),
-                toolButton(Icons.circle(), "Circle", "O", KeyCode.O, canvas::useCircleTool),
-                toolButton(Icons.polygon(), "Polygon", "P", KeyCode.P, canvas::usePolygonTool),
-                toolButton(Icons.freehand(), "Freehand", "D", KeyCode.D, canvas::useFreehandTool),
-                toolButton(Icons.text(), "Text", "T", KeyCode.T, canvas::useTextTool),
-                toolButton(Icons.eraser(), "Erase", "E", KeyCode.E, canvas::useEraserTool));
+                toolButton(Icons.rectangle(), Action.RECTANGLE, canvas::useRectangleTool),
+                toolButton(Icons.circle(), Action.CIRCLE, canvas::useCircleTool),
+                toolButton(Icons.polygon(), Action.POLYGON, canvas::usePolygonTool),
+                toolButton(Icons.freehand(), Action.FREEHAND, canvas::useFreehandTool),
+                toolButton(Icons.text(), Action.TEXT, canvas::useTextTool),
+                toolButton(Icons.eraser(), Action.ERASE, canvas::useEraserTool));
 
         sheetColumn.setMaxWidth(Double.MAX_VALUE);
         drawColumn.setMaxWidth(Double.MAX_VALUE);
@@ -186,14 +194,10 @@ public final class App extends Application {
     private Node buildSnapButtons() {
         gridSnapButton = new ToggleButton("Grid snap");
         gridSnapButton.setMaxWidth(Double.MAX_VALUE);
-        gridSnapButton.setTooltip(new Tooltip(
-                "Snap to the sheet grid — drawing, moving, editing  (G).  Hold Alt to disable."));
         gridSnapButton.setOnAction(e -> canvas.setGridSnap(gridSnapButton.isSelected()));
 
         objectSnapButton = new ToggleButton("Object snap");
         objectSnapButton.setMaxWidth(Double.MAX_VALUE);
-        objectSnapButton.setTooltip(new Tooltip(
-                "Snap a dragged object to others' edges and centres  (A).  Hold Alt to disable."));
         objectSnapButton.setOnAction(e -> canvas.setObjectSnap(objectSnapButton.isSelected()));
 
         HBox.setHgrow(gridSnapButton, Priority.ALWAYS);
@@ -254,12 +258,11 @@ public final class App extends Application {
         return new VBox(4, caption, new Label("Stroke"), stroke, fillOn, fill, new Label("Width"), width);
     }
 
-    private ToggleButton toolButton(Node icon, String name, String shortcut, KeyCode key, Runnable activate) {
+    private ToggleButton toolButton(Node icon, Action action, Runnable activate) {
         ToggleButton button = new ToggleButton();
         button.setGraphic(icon);
         button.setMaxWidth(Double.MAX_VALUE);
         button.setToggleGroup(toolGroup);
-        button.setTooltip(new Tooltip(name + "  (" + shortcut + ")"));
         button.setOnAction(e -> {
             if (button.isSelected()) {
                 turnOffMultiSelect();
@@ -268,8 +271,8 @@ public final class App extends Application {
                 canvas.clearTool();
             }
         });
-        toolKeys.put(key, button);
-        toolActivations.put(key, activate);
+        actionButtons.put(action, button);
+        actionRunnables.put(action, activate);
         drawButtons.add(button);
         return button;
     }
@@ -313,41 +316,51 @@ public final class App extends Application {
             if (scene.getFocusOwner() instanceof TextInputControl) {
                 return; // don't hijack typing (incl. Tab traversal in fields)
             }
-            if (e.getCode() == KeyCode.TAB) {
-                setMode(document.editorMode() == EditorMode.ASSEMBLY
-                        ? EditorMode.EDITION : EditorMode.ASSEMBLY);
-                e.consume();
+            if (e.isShortcutDown()) {
+                return; // Ctrl/Cmd combos go to the canvas / menu accelerators
+            }
+            Action action = bindings.actionFor(e.getCode());
+            if (action == null) {
                 return;
             }
-            if (!e.isShortcutDown() && e.getCode() == KeyCode.G) {
-                toggleGridSnap(); // grid snap applies in both modes
-                e.consume();
-                return;
+            if (action.editionOnly() && document.editorMode() != EditorMode.EDITION) {
+                return; // tool keys apply only while editing sheet content
             }
-            if (!e.isShortcutDown() && e.getCode() == KeyCode.A) {
-                toggleObjectSnap(); // object alignment applies in both modes
-                e.consume();
-                return;
-            }
-            if (e.isShortcutDown() || document.editorMode() != EditorMode.EDITION) {
-                return; // Ctrl/Cmd combos go to the canvas; tool keys apply only while editing
-            }
-            if (e.getCode() == KeyCode.V) {
+            runShortcut(action);
+            e.consume();
+        });
+    }
+
+    /** Perform a rebindable action, triggered from a keyboard shortcut. */
+    private void runShortcut(Action action) {
+        switch (action) {
+            case TOGGLE_MODE -> setMode(document.editorMode() == EditorMode.ASSEMBLY
+                    ? EditorMode.EDITION : EditorMode.ASSEMBLY);
+            case GRID_SNAP -> toggleGridSnap();
+            case OBJECT_SNAP -> toggleObjectSnap();
+            case SELECT -> {
                 toolGroup.selectToggle(null);
                 canvas.clearTool();
-                e.consume();
-                return;
             }
-            ToggleButton button = toolKeys.get(e.getCode());
-            if (button != null) {
-                if (!button.isSelected()) {
+            default -> { // a drawing tool
+                ToggleButton button = actionButtons.get(action);
+                if (button != null && !button.isSelected()) {
                     turnOffMultiSelect();
                     button.setSelected(true);
-                    toolActivations.get(e.getCode()).run();
+                    actionRunnables.get(action).run();
                 }
-                e.consume();
             }
-        });
+        }
+    }
+
+    /** Refresh every tooltip that shows a shortcut so it reflects the current bindings. */
+    private void refreshShortcutHints() {
+        actionButtons.forEach((a, b) -> b.setTooltip(new Tooltip(a.label() + "  (" + bindings.keyText(a) + ")")));
+        modeButton.setTooltip(new Tooltip("Switch Assembly / Edition  (" + bindings.keyText(Action.TOGGLE_MODE) + ")"));
+        gridSnapButton.setTooltip(new Tooltip("Snap to the sheet grid — drawing, moving, editing  ("
+                + bindings.keyText(Action.GRID_SNAP) + ").  Hold Alt to disable."));
+        objectSnapButton.setTooltip(new Tooltip("Snap a dragged object to others' edges and centres  ("
+                + bindings.keyText(Action.OBJECT_SNAP) + ").  Hold Alt to disable."));
     }
 
     private MenuItem menuItem(String text, String accelerator, Runnable action) {

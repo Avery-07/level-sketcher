@@ -6,6 +6,7 @@ import io.github.avery07.command.SetPolygonVerticesCommand;
 import io.github.avery07.command.SetRadiusCommand;
 import io.github.avery07.command.SetSymbolAnchorsCommand;
 import io.github.avery07.command.SetSymbolParamsCommand;
+import io.github.avery07.command.SetTextCommand;
 import io.github.avery07.geometry.Vec2;
 import io.github.avery07.model.Sheet;
 import io.github.avery07.model.element.Circle;
@@ -13,6 +14,7 @@ import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.Element;
 import io.github.avery07.model.element.ImageElement;
 import io.github.avery07.model.element.SymbolInstance;
+import io.github.avery07.model.element.TextElement;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +29,7 @@ import java.util.Map;
 final class ElementEditor {
 
     private static final double MIN_RADIUS = 1;
+    private static final double MIN_FONT = 2;
 
     private Element element;
     private Sheet sheet;
@@ -40,6 +43,9 @@ final class ElementEditor {
     private Map<String, Double> paramsBefore;    // cone direction/fov
     private Vec2 imageBeforeTopLeft, imageFixedCorner; // image corner resize
     private double imageBeforeW, imageBeforeH;
+    private double fontBefore;                    // text scale
+    private Vec2 textAnchor;
+    private double startScaleDist;
 
     boolean active() {
         return element != null;
@@ -69,6 +75,13 @@ final class ElementEditor {
                 imageBeforeH = img.height();
                 double[] f = imageCorner((index + 2) % 4, img);
                 imageFixedCorner = new Vec2(f[0], f[1]);
+            }
+            case TEXT_SCALE -> {
+                TextElement t = (TextElement) e;
+                fontBefore = t.fontSize();
+                textAnchor = t.anchor();
+                var b = t.bounds(); // scale relative to the current corner→anchor distance (no jump)
+                startScaleDist = Math.max(1e-6, new Vec2(b.maxX(), b.maxY()).distanceTo(textAnchor));
             }
         }
     }
@@ -119,6 +132,12 @@ final class ElementEditor {
                         Math.min(imageFixedCorner.y(), corner.y())));
                 img.setWidth(Math.max(1, Math.abs(corner.x() - imageFixedCorner.x())));
                 img.setHeight(Math.max(1, Math.abs(corner.y() - imageFixedCorner.y())));
+            }
+            case TEXT_SCALE -> {
+                // Uniform scale: font size tracks the corner's distance from the fixed anchor.
+                TextElement t = (TextElement) element;
+                double scale = currentLocal.distanceTo(textAnchor) / startScaleDist;
+                t.setFontSize(Math.max(MIN_FONT, fontBefore * scale));
             }
         }
         lastLocal = currentLocal;
@@ -181,6 +200,11 @@ final class ElementEditor {
                         && img.width() == imageBeforeW && img.height() == imageBeforeH;
                 yield unchanged ? null : new SetImageRectCommand(img, imageBeforeTopLeft,
                         imageBeforeW, imageBeforeH, img.topLeft(), img.width(), img.height());
+            }
+            case TEXT_SCALE -> {
+                TextElement t = (TextElement) element;
+                yield t.fontSize() == fontBefore ? null
+                        : new SetTextCommand(t, t.content(), fontBefore, t.content(), t.fontSize());
             }
         };
     }

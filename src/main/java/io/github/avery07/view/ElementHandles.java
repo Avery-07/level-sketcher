@@ -20,7 +20,7 @@ import java.util.List;
  */
 public final class ElementHandles {
 
-    public enum Kind { VERTEX, EDGE, RADIUS, CONE_DIR, CONE_FOV, IMAGE_CORNER }
+    public enum Kind { VERTEX, EDGE, RADIUS, CONE_DIR, CONE_FOV, IMAGE_CORNER, TEXT_SCALE }
 
     public record Hit(Kind kind, int index) {
     }
@@ -54,7 +54,12 @@ public final class ElementHandles {
                     screen(s, new Vec2(c.center().x() + c.radius(), c.center().y()), vp)));
             case FreehandStroke f -> { }
             case SymbolInstance sym -> symbolHandles(out, sym, s, vp);
-            case TextElement t -> { } // text moves as a whole; size is edited in the inspector
+            case TextElement t -> {
+                // A single corner handle at the text's lower-right scales the font size (which is
+                // one uniform value, so proportions are always preserved).
+                var b = t.bounds();
+                out.add(new Handle(Kind.TEXT_SCALE, 0, screen(s, new Vec2(b.maxX(), b.maxY()), vp)));
+            }
             case ImageElement img -> {
                 double x = img.topLeft().x(), y = img.topLeft().y(), w = img.width(), h = img.height();
                 out.add(new Handle(Kind.IMAGE_CORNER, 0, screen(s, new Vec2(x, y), vp)));
