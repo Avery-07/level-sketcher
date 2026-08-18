@@ -16,6 +16,7 @@ import io.github.avery07.model.element.SymbolInstance;
 import io.github.avery07.model.element.TextElement;
 import io.github.avery07.model.symbol.PlacementPattern;
 import io.github.avery07.view.ElementHandles;
+import io.github.avery07.view.LayerTabs;
 import io.github.avery07.view.SheetGeometry;
 import io.github.avery07.view.SheetHandles;
 import io.github.avery07.view.Viewport;
@@ -54,6 +55,8 @@ public final class WorkspaceRenderer {
     private static final Color GRID_COLOR = Color.web("#e6e7ea");
     private static final Color LABEL_COLOR = Color.web("#6b7280");
     private static final Color BORDER = Color.web("#c2c6cd");
+    private static final Color TAB_FILL = Color.web("#eceef1");    // inactive layer tab
+    private static final Color TAB_ACTIVE = Color.web("#9199a3");  // active layer tab
     private static final Color SHADOW = Color.rgb(20, 22, 28, 0.05);
     private static final Color SELECTION = Color.web("#3b82f6");
     private static final Color HANDLE_FILL = Color.WHITE;
@@ -146,11 +149,10 @@ public final class WorkspaceRenderer {
 
         drawGrid(g, s);
 
-        for (Layer layer : s.layers()) {
-            if (!layer.isVisible()) {
-                continue;
-            }
-            for (Element e : layer.elements()) {
+        // Only the active layer is drawn: layers are pages you switch between, not stacked overlays.
+        Layer active = s.activeLayer();
+        if (active != null) {
+            for (Element e : active.elements()) {
                 drawElement(g, s, e);
             }
         }
@@ -159,10 +161,33 @@ public final class WorkspaceRenderer {
         g.setFill(LABEL_COLOR);
         g.setFont(LABEL_FONT);
         g.fillText(s.name(), tl.x() + LABEL_DX, tl.y() + LABEL_DY);
+        drawLayerTabs(g, s);
 
         g.setStroke(BORDER);
         g.setLineWidth(1);
         g.strokePolygon(xs, ys, 4);
+    }
+
+    /** Numbered tabs next to the name; the filled one is the active (shown) layer. */
+    private void drawLayerTabs(GraphicsContext g, Sheet s) {
+        Layer active = s.activeLayer();
+        java.util.List<Layer> layers = s.layers();
+        g.setFont(LABEL_FONT);
+        g.setTextAlign(javafx.scene.text.TextAlignment.CENTER);
+        g.setTextBaseline(javafx.geometry.VPos.CENTER);
+        for (LayerTabs.Tab t : LayerTabs.tabs(s, viewport)) {
+            Rect r = t.screen();
+            boolean isActive = layers.get(t.index()) == active;
+            g.setFill(isActive ? TAB_ACTIVE : TAB_FILL);
+            g.fillRoundRect(r.minX(), r.minY(), r.width(), r.height(), 5, 5);
+            g.setStroke(BORDER);
+            g.setLineWidth(1);
+            g.strokeRoundRect(r.minX(), r.minY(), r.width(), r.height(), 5, 5);
+            g.setFill(isActive ? Color.WHITE : LABEL_COLOR);
+            g.fillText(String.valueOf(t.index() + 1), (r.minX() + r.maxX()) / 2, (r.minY() + r.maxY()) / 2 + 1);
+        }
+        g.setTextAlign(javafx.scene.text.TextAlignment.LEFT); // restore for the next sheet's name
+        g.setTextBaseline(javafx.geometry.VPos.BASELINE);
     }
 
     /** A soft drop shadow behind the sheet (a few offset translucent copies). */

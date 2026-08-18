@@ -10,7 +10,6 @@ import io.github.avery07.model.Sheet;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
-import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.input.KeyCode;
@@ -20,10 +19,11 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 /**
- * The Layers panel for the selected sheet (spec §7.7): list layers top-first, toggle each
- * layer's visibility, choose the active layer (where new elements land), rename, add/remove, and
- * reorder. Rebuilt only when the layer structure changes (via a signature), so unrelated
- * document events (hover, selection of a different element) don't churn it.
+ * The Layers panel for the selected sheet (spec §7.7): list layers top-first, choose the active
+ * layer (the one shown on the canvas and where new elements land), rename, add/remove, and reorder.
+ * Layers are pages you switch between, not overlays, so there is no per-layer visibility toggle.
+ * Rebuilt only when the layer structure changes (via a signature), so unrelated document events
+ * (hover, selection of a different element) don't churn it.
  */
 public final class LayersPanel extends VBox {
 
@@ -86,13 +86,6 @@ public final class LayersPanel extends VBox {
     }
 
     private Node layerRow(Sheet sheet, Layer layer) {
-        CheckBox visible = new CheckBox();
-        visible.setSelected(layer.isVisible());
-        visible.setOnAction(e -> {
-            layer.setVisible(visible.isSelected());
-            document.markDirty();
-        });
-
         Label name = new Label(layer.name());
         name.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(name, Priority.ALWAYS);
@@ -108,7 +101,7 @@ public final class LayersPanel extends VBox {
             }
         });
 
-        HBox row = new HBox(6, visible, name);
+        HBox row = new HBox(6, name);
         row.setPadding(new Insets(3));
         row.getStyleClass().add(layer == sheet.activeLayer() ? "layer-row-active" : "layer-row");
         return row;

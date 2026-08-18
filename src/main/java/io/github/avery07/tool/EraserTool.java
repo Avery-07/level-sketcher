@@ -114,10 +114,9 @@ public final class EraserTool implements Tool {
                 continue;
             }
             double tolerance = radiusWorld / Math.max(1e-6, s.scale());
-            for (Layer layer : s.layers()) {
-                if (layer.isVisible() && eraseInLayer(layer, center, tolerance)) {
-                    changed = true;
-                }
+            Layer active = s.activeLayer(); // only the shown layer is erasable
+            if (active != null && eraseInLayer(active, center, tolerance)) {
+                changed = true;
             }
         }
         if (changed) {

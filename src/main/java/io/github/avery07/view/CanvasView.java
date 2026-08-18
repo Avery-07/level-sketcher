@@ -17,6 +17,7 @@ import io.github.avery07.document.EditorMode;
 import io.github.avery07.geometry.Hit;
 import io.github.avery07.geometry.Rect;
 import io.github.avery07.geometry.Vec2;
+import io.github.avery07.model.Layer;
 import io.github.avery07.model.Sheet;
 import io.github.avery07.model.element.EditablePolygon;
 import io.github.avery07.model.element.Element;
@@ -530,12 +531,36 @@ public final class CanvasView extends StackPane implements CanvasContext {
             return;
         }
 
+        if (tryLayerTabClick(sx, sy)) {
+            return; // a layer tab takes priority over selecting/moving the sheet
+        }
         Vec2 world = worldOf(sx, sy);
         if (document.editorMode() == EditorMode.ASSEMBLY) {
             pressAssembly(sx, sy, world, e);
         } else {
             pressEdition(sx, sy, world, e);
         }
+    }
+
+    /** Switch a sheet's active (shown) layer when its numbered tab is clicked. */
+    private boolean tryLayerTabClick(double sx, double sy) {
+        var sheets = document.workspace().sheets();
+        for (int i = sheets.size() - 1; i >= 0; i--) {
+            Sheet s = sheets.get(i);
+            int idx = LayerTabs.hit(s, viewport, sx, sy);
+            if (idx < 0) {
+                continue;
+            }
+            Layer target = s.layers().get(idx);
+            if (target != s.activeLayer()) {
+                s.setActiveLayer(target);
+                document.selectSheet(s); // switch working sheet, dropping stale element selection
+            } else {
+                document.notifyChanged();
+            }
+            return true;
+        }
+        return false;
     }
 
     /** Assembly mode: only sheets are interactive (select, move, resize/rotate/extend, rename). */
@@ -1442,24 +1467,18 @@ public final class CanvasView extends StackPane implements CanvasContext {
         return true;
     }
 
-    /** Topmost element of a sheet under a world point, across visible layers, or {@code null}. */
+    /** Topmost element of a sheet's active layer under a world point, or {@code null}. */
     private Element topmostElementIn(Sheet s, Vec2 world) {
         Vec2 local = SheetGeometry.worldToLocal(s, world);
-        if (local == null) {
+        Layer active = s.activeLayer();
+        if (local == null || active == null) {
             return null;
         }
         double tol = elementToleranceLocal(s);
-        var layers = s.layers();
-        for (int li = layers.size() - 1; li >= 0; li--) {
-            var layer = layers.get(li);
-            if (!layer.isVisible()) {
-                continue;
-            }
-            var elements = layer.elements();
-            for (int j = elements.size() - 1; j >= 0; j--) {
-                if (elements.get(j).hitTest(local, tol)) {
-                    return elements.get(j);
-                }
+        var elements = active.elements();
+        for (int j = elements.size() - 1; j >= 0; j--) {
+            if (elements.get(j).hitTest(local, tol)) {
+                return elements.get(j);
             }
         }
         return null;

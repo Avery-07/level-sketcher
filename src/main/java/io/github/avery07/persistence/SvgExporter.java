@@ -45,11 +45,10 @@ public final class SvgExporter {
             Vec2 tl = corners.get(0);
             body.append(text(tl.x(), tl.y() - 6, s.name(), "#6b7280"));
 
-            for (Layer layer : s.layers()) {
-                if (layer.isVisible()) {
-                    for (Element e : layer.elements()) {
-                        element(body, b, s, e);
-                    }
+            Layer active = s.activeLayer(); // only the shown layer, matching the canvas
+            if (active != null) {
+                for (Element e : active.elements()) {
+                    element(body, b, s, e);
                 }
             }
         }
