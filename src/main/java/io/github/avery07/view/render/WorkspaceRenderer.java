@@ -161,11 +161,12 @@ public final class WorkspaceRenderer {
         g.setFill(LABEL_COLOR);
         g.setFont(LABEL_FONT);
         g.fillText(s.name(), tl.x() + LABEL_DX, tl.y() + LABEL_DY);
-        drawLayerTabs(g, s);
 
         g.setStroke(BORDER);
         g.setLineWidth(1);
         g.strokePolygon(xs, ys, 4);
+
+        drawLayerTabs(g, s); // last, so the frame's top edge can't clip the tabs' lower side
     }
 
     /** Numbered tabs next to the name; the filled one is the active (shown) layer. */

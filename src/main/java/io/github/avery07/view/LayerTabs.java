@@ -18,9 +18,10 @@ import java.util.List;
 public final class LayerTabs {
 
     public static final double W = 18;
-    public static final double H = 15;
+    public static final double H = 14;
     private static final double GAP = 2;
-    private static final double PAD = 8; // gap from the name to the first tab
+    private static final double PAD = 8;   // gap from the name to the first tab
+    private static final double LIFT = 4;  // clearance between the tab's bottom and the frame edge
 
     private static final Text MEASURER = new Text();
 
@@ -40,7 +41,7 @@ public final class LayerTabs {
         Vec2 tl = vp.toScreen(SheetGeometry.localToWorld(s, s.left(), s.top()));
         MEASURER.setText(s.name());
         double x0 = tl.x() + WorkspaceRenderer.LABEL_DX + MEASURER.getLayoutBounds().getWidth() + PAD;
-        double y = tl.y() - H - 2; // just above the frame, level with the name
+        double y = tl.y() - H - LIFT; // fully above the frame, level with the name
         int n = s.layers().size();
         List<Tab> out = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {
