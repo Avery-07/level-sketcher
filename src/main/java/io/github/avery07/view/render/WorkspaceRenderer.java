@@ -106,6 +106,11 @@ public final class WorkspaceRenderer {
                 drawElementHandles(g, owner, single);
             }
         }
+
+        // Layer tabs sit on the overlay, above the selection outline/handles, so nothing clips them.
+        for (Sheet s : document.workspace().sheets()) {
+            drawLayerTabs(g, s);
+        }
     }
 
     private void drawSheetOutline(GraphicsContext g, Sheet s) {
@@ -165,8 +170,6 @@ public final class WorkspaceRenderer {
         g.setStroke(BORDER);
         g.setLineWidth(1);
         g.strokePolygon(xs, ys, 4);
-
-        drawLayerTabs(g, s); // last, so the frame's top edge can't clip the tabs' lower side
     }
 
     /** Numbered tabs next to the name; the filled one is the active (shown) layer. */
