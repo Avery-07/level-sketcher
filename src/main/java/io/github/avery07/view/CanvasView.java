@@ -45,6 +45,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.text.Text;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -105,6 +106,8 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private boolean snapEngaged;
     private boolean snapSuppressed;
     private Vec2 snapReleaseRef;
+    // Peer sheet bounds for the active sheet move; captured once at press since peers don't move.
+    private final List<Rect> sheetPeers = new ArrayList<>();
 
     // Element-move state (select mode). Moves snap the element's bounding-box corner, so geometry
     // lands on the grid regardless of where within the element it was grabbed.
@@ -115,6 +118,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private Rect moveBoundsStart; // mover's local bbox at press
     private final List<Rect> moveOthers = new ArrayList<>(); // peers' bboxes (elements + sheet frame)
     private double moveDx, moveDy;
+    private ElementEditor.PointSnap editSnapper; // grid+object snapper for the active vertex edit
 
     // Sheet-creation drag state (Assembly, empty canvas).
     private Vec2 createStartWorld;
@@ -246,23 +250,20 @@ public final class CanvasView extends StackPane implements CanvasContext {
         requestFocus();
     }
 
-    public boolean isGridSnap() {
-        return gridSnap;
-    }
-
     /** Toggle object alignment: dragged elements snap to other elements' edges/centres. */
     public void setObjectSnap(boolean on) {
         objectSnap = on;
         requestFocus();
     }
 
-    public boolean isObjectSnap() {
-        return objectSnap;
-    }
-
     /** Whether grid snapping is in effect for the current gesture (Alt disables it). */
     private boolean snapActive() {
         return gridSnap && !altBypass;
+    }
+
+    /** A local point snapped to the grid when grid snap is active, else unchanged. */
+    private Vec2 gridSnapped(Vec2 local) {
+        return snapActive() ? GridSnap.snap(local, GridSnap.STEP) : local;
     }
 
     /** Whether object alignment is in effect for the current gesture (Alt disables it). */
@@ -418,8 +419,8 @@ public final class CanvasView extends StackPane implements CanvasContext {
     }
 
     @Override
-    public Vec2 snap(Sheet sheet, Vec2 local) {
-        return snapActive() ? GridSnap.snap(local, GridSnap.STEP) : local;
+    public Vec2 snapToGrid(Sheet sheet, Vec2 local) {
+        return gridSnapped(local);
     }
 
     @Override
@@ -449,20 +450,12 @@ public final class CanvasView extends StackPane implements CanvasContext {
         if (sheets.isEmpty()) {
             return;
         }
-        double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE;
-        double maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
-        for (Sheet s : sheets) {
-            double[][] corners = {{s.left(), s.top()}, {s.right(), s.top()},
-                    {s.right(), s.bottom()}, {s.left(), s.bottom()}};
-            for (double[] c : corners) {
-                Vec2 w = SheetGeometry.localToWorld(s, c[0], c[1]);
-                minX = Math.min(minX, w.x());
-                minY = Math.min(minY, w.y());
-                maxX = Math.max(maxX, w.x());
-                maxY = Math.max(maxY, w.y());
-            }
+        Rect bounds = sheetWorldBounds(sheets.get(0));
+        for (int i = 1; i < sheets.size(); i++) {
+            bounds = bounds.union(sheetWorldBounds(sheets.get(i)));
         }
-        viewport.frame(minX, minY, maxX, maxY, getWidth(), getHeight());
+        viewport.frame(bounds.minX(), bounds.minY(), bounds.maxX(), bounds.maxY(),
+                getWidth(), getHeight());
         requestRender();
     }
 
@@ -600,6 +593,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
                 manipulator.beginTransform(owner, handle, world);
             } else {
                 manipulator.beginMove(owner, world); // grab anywhere on the sheet to move it
+                collectSheetPeers(java.util.List.of(owner));
             }
             mode = Mode.SHEET;
             return;
@@ -652,6 +646,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
             if (h != null) {
                 elementEditor.begin(selEl, selSheet, h, SheetGeometry.worldToLocal(selSheet, world));
                 collectPeerBounds(selSheet, java.util.List.of(selEl), moveOthers);
+                editSnapper = editPointSnap(selSheet);
                 clearAlignGuides();
                 mode = Mode.ELEMENT_EDIT;
                 return;
@@ -744,9 +739,11 @@ public final class CanvasView extends StackPane implements CanvasContext {
             }
             case SHEET -> {
                 manipulator.update(worldOf(e.getX(), e.getY()), e.isShiftDown());
-                clearAlignGuides();
-                if (manipulator.moving() && objectSnapActive()) {
-                    snapSheetMove(manipulator.sheet());
+                if (manipulator.moving()) {
+                    Sheet s = manipulator.sheet();
+                    snapSheets(java.util.List.of(s), sheetWorldBounds(s));
+                } else {
+                    clearAlignGuides();
                 }
                 requestRender();
             }
@@ -756,11 +753,9 @@ public final class CanvasView extends StackPane implements CanvasContext {
             }
             case ELEMENT_EDIT -> {
                 if (elementEditor.active()) {
-                    Sheet s = elementEditor.sheet();
                     clearAlignGuides();
-                    elementEditor.update(
-                            SheetGeometry.worldToLocal(s, worldOf(e.getX(), e.getY())),
-                            editPointSnap(s));
+                    elementEditor.update(SheetGeometry.worldToLocal(
+                            elementEditor.sheet(), worldOf(e.getX(), e.getY())), editSnapper);
                     requestRender();
                 }
             }
@@ -964,27 +959,34 @@ public final class CanvasView extends StackPane implements CanvasContext {
         if (cur == null || moveRefStart == null) {
             return;
         }
-        // Track an absolute delta from the reference corner so snapping is stable frame to frame.
-        Vec2 desiredRef = cur.sub(moveGrabOffset);
-        Vec2 snappedRef = snapActive() ? GridSnap.snap(desiredRef, GridSnap.STEP) : desiredRef;
-        double totalDx = snappedRef.x() - moveRefStart.x();
-        double totalDy = snappedRef.y() - moveRefStart.y();
+        Vec2 total = snappedMoveDelta(movingSheet, moveBoundsStart, moveRefStart, moveGrabOffset, cur);
+        movingElement.translate(total.x() - moveDx, total.y() - moveDy);
+        moveDx = total.x();
+        moveDy = total.y();
+    }
 
-        // Object alignment nudges each axis onto a neighbour's edge/centre, overriding the grid
-        // on that axis when a match is within tolerance.
+    /**
+     * The total local delta for a move gesture: snap the reference corner to the grid, then let
+     * object alignment nudge each axis onto a neighbour's edge/centre (overriding the grid on that
+     * axis when within tolerance), publishing the guides. Tracking an absolute delta from the
+     * reference corner keeps snapping stable frame to frame. Shared by single and multi moves.
+     */
+    private Vec2 snappedMoveDelta(Sheet owner, Rect boundsStart, Vec2 refStart,
+                                  Vec2 grabOffset, Vec2 cur) {
+        Vec2 snappedRef = gridSnapped(cur.sub(grabOffset));
+        double totalDx = snappedRef.x() - refStart.x();
+        double totalDy = snappedRef.y() - refStart.y();
         clearAlignGuides();
         if (objectSnapActive() && !moveOthers.isEmpty()) {
-            Rect proposed = shiftRect(moveBoundsStart, totalDx, totalDy);
-            ObjectSnap.Result r = moveObjectSnap(proposed, moveOthers, localPerPixel(movingSheet));
+            ObjectSnap.Result r = moveObjectSnap(
+                    boundsStart.translate(totalDx, totalDy), moveOthers, localPerPixel(owner));
             if (r.snapped()) {
                 totalDx += r.dx();
                 totalDy += r.dy();
-                addLocalGuides(movingSheet, r.guides());
+                addLocalGuides(owner, r.guides());
             }
         }
-        movingElement.translate(totalDx - moveDx, totalDy - moveDy);
-        moveDx = totalDx;
-        moveDy = totalDy;
+        return new Vec2(totalDx, totalDy);
     }
 
     // ----- object-alignment support -----
@@ -1013,9 +1015,9 @@ public final class CanvasView extends StackPane implements CanvasContext {
         return OBJECT_SNAP_PIXELS * localPerPixel(s);
     }
 
-    /** Local units per screen pixel on a sheet (accounts for zoom and the sheet's content scale). */
+    /** Local units per screen pixel on a sheet (world-per-pixel divided by the content scale). */
     private double localPerPixel(Sheet s) {
-        return 1.0 / (viewport.zoom() * Math.max(1e-6, s.scale()));
+        return worldPerPixel() / Math.max(1e-6, s.scale());
     }
 
     private void resetSnapHold() {
@@ -1058,7 +1060,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
      */
     private ElementEditor.PointSnap editPointSnap(Sheet sheet) {
         return local -> {
-            Vec2 q = snapActive() ? GridSnap.snap(local, GridSnap.STEP) : local;
+            Vec2 q = gridSnapped(local);
             if (objectSnapActive() && !moveOthers.isEmpty()) {
                 ObjectSnap.Result r = ObjectSnap.snap(
                         new Rect(q.x(), q.y(), q.x(), q.y()), moveOthers, objectSnapTol(sheet));
@@ -1071,57 +1073,53 @@ public final class CanvasView extends StackPane implements CanvasContext {
         };
     }
 
-    /** Align a single sheet's world bounding box to the other sheets while it is being moved. */
-    private void snapSheetMove(Sheet s) {
-        List<Rect> others = new ArrayList<>();
+    /** Capture the world bounds of every sheet except the ones moving, for the whole gesture. */
+    private void collectSheetPeers(Collection<Sheet> moving) {
+        sheetPeers.clear();
         for (Sheet o : document.workspace().sheets()) {
-            if (o != s) {
-                others.add(sheetWorldBounds(o));
+            if (!moving.contains(o)) {
+                sheetPeers.add(sheetWorldBounds(o));
             }
         }
-        if (others.isEmpty()) {
+    }
+
+    /**
+     * Align moving sheets to the (cached) peer sheets by their combined world bounds, then shift
+     * every mover by the same offset and publish the world-space guides. Shared by single and
+     * multi sheet moves; also clears stale guides when snapping is off or there are no peers.
+     */
+    private void snapSheets(List<Sheet> moving, Rect movingBounds) {
+        clearAlignGuides();
+        if (!objectSnapActive() || sheetPeers.isEmpty()) {
             return;
         }
-        ObjectSnap.Result r = moveObjectSnap(sheetWorldBounds(s), others, worldPerPixel());
+        ObjectSnap.Result r = moveObjectSnap(movingBounds, sheetPeers, worldPerPixel());
         if (r.snapped()) {
-            s.setCenter(new Vec2(s.center().x() + r.dx(), s.center().y() + r.dy()));
+            for (Sheet s : moving) {
+                s.setCenter(new Vec2(s.center().x() + r.dx(), s.center().y() + r.dy()));
+            }
             alignGuidesWorld.addAll(r.guides()); // already world-space
         }
     }
 
     /** A sheet's axis-aligned bounding box in world space (bounds of its four rotated corners). */
     private Rect sheetWorldBounds(Sheet s) {
-        double[][] corners = {{s.left(), s.top()}, {s.right(), s.top()},
-                {s.right(), s.bottom()}, {s.left(), s.bottom()}};
-        double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE;
-        double maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
-        for (double[] c : corners) {
+        Vec2 tl = SheetGeometry.localToWorld(s, s.left(), s.top());
+        Rect bounds = new Rect(tl.x(), tl.y(), tl.x(), tl.y());
+        double[][] rest = {{s.right(), s.top()}, {s.right(), s.bottom()}, {s.left(), s.bottom()}};
+        for (double[] c : rest) {
             Vec2 w = SheetGeometry.localToWorld(s, c[0], c[1]);
-            minX = Math.min(minX, w.x());
-            minY = Math.min(minY, w.y());
-            maxX = Math.max(maxX, w.x());
-            maxY = Math.max(maxY, w.y());
+            bounds = bounds.union(new Rect(w.x(), w.y(), w.x(), w.y()));
         }
-        return new Rect(minX, minY, maxX, maxY);
+        return bounds;
     }
 
     private Rect combinedSheetBounds(List<Sheet> sheets) {
-        double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE;
-        double maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
-        for (Sheet s : sheets) {
-            Rect b = sheetWorldBounds(s);
-            minX = Math.min(minX, b.minX());
-            minY = Math.min(minY, b.minY());
-            maxX = Math.max(maxX, b.maxX());
-            maxY = Math.max(maxY, b.maxY());
+        Rect bounds = sheetWorldBounds(sheets.get(0));
+        for (int i = 1; i < sheets.size(); i++) {
+            bounds = bounds.union(sheetWorldBounds(sheets.get(i)));
         }
-        return new Rect(minX, minY, maxX, maxY);
-    }
-
-    private Rect shiftRect(Rect r,
-                                                      double dx, double dy) {
-        return new Rect(
-                r.minX() + dx, r.minY() + dy, r.maxX() + dx, r.maxY() + dy);
+        return bounds;
     }
 
     private void clearAlignGuides() {
@@ -1154,17 +1152,12 @@ public final class CanvasView extends StackPane implements CanvasContext {
         multiElements.clear();
         multiElements.addAll(document.selectedElements());
         Vec2 grab = SheetGeometry.worldToLocal(owner, world);
-        double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE;
-        double maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
-        for (Element el : multiElements) {
-            Rect b = el.bounds();
-            minX = Math.min(minX, b.minX());
-            minY = Math.min(minY, b.minY());
-            maxX = Math.max(maxX, b.maxX());
-            maxY = Math.max(maxY, b.maxY());
+        Rect combined = multiElements.get(0).bounds();
+        for (int i = 1; i < multiElements.size(); i++) {
+            combined = combined.union(multiElements.get(i).bounds());
         }
-        multiBoundsStart = new Rect(minX, minY, maxX, maxY);
-        multiRefStart = new Vec2(minX, minY);
+        multiBoundsStart = combined;
+        multiRefStart = new Vec2(combined.minX(), combined.minY());
         multiGrabOffset = grab.sub(multiRefStart);
         collectPeerBounds(owner, multiElements, moveOthers);
         multiDx = 0;
@@ -1178,29 +1171,15 @@ public final class CanvasView extends StackPane implements CanvasContext {
         if (cur == null || multiRefStart == null) {
             return;
         }
-        // Snap the group's combined bounding-box corner, then shift every element by the same delta.
-        Vec2 desiredRef = cur.sub(multiGrabOffset);
-        Vec2 snappedRef = snapActive() ? GridSnap.snap(desiredRef, GridSnap.STEP) : desiredRef;
-        double totalDx = snappedRef.x() - multiRefStart.x();
-        double totalDy = snappedRef.y() - multiRefStart.y();
-
-        clearAlignGuides();
-        if (objectSnapActive() && !moveOthers.isEmpty()) {
-            Rect proposed = shiftRect(multiBoundsStart, totalDx, totalDy);
-            ObjectSnap.Result r = moveObjectSnap(proposed, moveOthers, localPerPixel(multiOwner));
-            if (r.snapped()) {
-                totalDx += r.dx();
-                totalDy += r.dy();
-                addLocalGuides(multiOwner, r.guides());
-            }
-        }
-        double stepDx = totalDx - multiDx;
-        double stepDy = totalDy - multiDy;
+        // Snap the group's combined bounding box, then shift every element by the same delta.
+        Vec2 total = snappedMoveDelta(multiOwner, multiBoundsStart, multiRefStart, multiGrabOffset, cur);
+        double stepDx = total.x() - multiDx;
+        double stepDy = total.y() - multiDy;
         for (Element el : multiElements) {
             el.translate(stepDx, stepDy);
         }
-        multiDx = totalDx;
-        multiDy = totalDy;
+        multiDx = total.x();
+        multiDy = total.y();
     }
 
     private void commitMultiElementMove() {
@@ -1227,6 +1206,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
         for (Sheet s : multiSheets) {
             multiSheetStart.add(s.capture());
         }
+        collectSheetPeers(multiSheets);
         mode = Mode.MULTI_SHEETS;
     }
 
@@ -1235,27 +1215,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
         for (int i = 0; i < multiSheets.size(); i++) {
             multiSheets.get(i).setCenter(multiSheetStart.get(i).center().add(delta));
         }
-        clearAlignGuides();
-        if (!objectSnapActive()) {
-            return;
-        }
-        List<Rect> others = new ArrayList<>();
-        for (Sheet o : document.workspace().sheets()) {
-            if (!multiSheets.contains(o)) {
-                others.add(sheetWorldBounds(o));
-            }
-        }
-        if (others.isEmpty()) {
-            return;
-        }
-        Rect movingB = combinedSheetBounds(multiSheets);
-        ObjectSnap.Result r = moveObjectSnap(movingB, others, worldPerPixel());
-        if (r.snapped()) {
-            for (Sheet s : multiSheets) {
-                s.setCenter(new Vec2(s.center().x() + r.dx(), s.center().y() + r.dy()));
-            }
-            alignGuidesWorld.addAll(r.guides()); // already world-space
-        }
+        snapSheets(multiSheets, combinedSheetBounds(multiSheets));
     }
 
     private void commitMultiSheetMove() {

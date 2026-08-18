@@ -17,7 +17,7 @@ public final class GridSnap {
     }
 
     /** Round a single coordinate to the nearest multiple of {@code step}. */
-    public static double snapCoord(double v, double step) {
+    private static double snapCoord(double v, double step) {
         return Math.round(v / step) * step;
     }
 

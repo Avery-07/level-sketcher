@@ -64,11 +64,6 @@ public final class KeyBindings {
         }
     }
 
-    /** The key bound to an action, or {@code null} if unbound. */
-    public KeyCode key(Action action) {
-        return keys.get(action);
-    }
-
     /** Display text for an action's key ("—" when unbound). */
     public String keyText(Action action) {
         KeyCode c = keys.get(action);

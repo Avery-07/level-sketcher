@@ -29,10 +29,11 @@ public interface CanvasContext {
     Vec2 localToWorld(Sheet sheet, double localX, double localY);
 
     /**
-     * Snap a sheet-local point to the active snapping helpers (grid), or return it unchanged when
-     * snapping is off. Drawing tools route the points they place through here.
+     * Snap a sheet-local point to the grid when grid snap is on, else return it unchanged. Drawing
+     * tools route placed points through here. (Object alignment applies only to moves/edits, not
+     * to freshly drawn points, so it is intentionally not part of this.)
      */
-    Vec2 snap(Sheet sheet, Vec2 local);
+    Vec2 snapToGrid(Sheet sheet, Vec2 local);
 
     /** Topmost sheet under a world point, or {@code null}. */
     Sheet topmostSheetAt(Vec2 world);

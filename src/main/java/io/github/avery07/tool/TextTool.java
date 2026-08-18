@@ -21,7 +21,7 @@ public final class TextTool implements Tool {
             return;
         }
         TextElement text = new TextElement(
-                ctx.snap(sheet, ctx.worldToLocal(sheet, world)), "Text", DEFAULT_SIZE);
+                ctx.snapToGrid(sheet, ctx.worldToLocal(sheet, world)), "Text", DEFAULT_SIZE);
         text.setStyle(ctx.currentStyle());
         ctx.execute(new AddElementCommand(sheet, text));
         ctx.document().selectElement(sheet, text);
