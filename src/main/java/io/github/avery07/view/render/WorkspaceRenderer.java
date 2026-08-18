@@ -44,7 +44,8 @@ public final class WorkspaceRenderer {
     public static final double LABEL_DX = 2;
     public static final double LABEL_DY = -7;
 
-    private static final double GRID_BASE = 40;    // grid spacing in local units at scale 1
+    // Grid spacing in local units at scale 1; shared with snap-to-grid so the two never drift.
+    private static final double GRID_BASE = io.github.avery07.view.GridSnap.STEP;
     private static final int MAX_GRID_LINES = 400; // per axis, perf guard
     private static final int CIRCLE_SEGMENTS = 64; // polygon approximation for circles
 

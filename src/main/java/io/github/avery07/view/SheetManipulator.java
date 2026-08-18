@@ -41,6 +41,11 @@ final class SheetManipulator {
         return sheet != null;
     }
 
+    /** True while the current gesture is a whole-sheet move (not resize/rotate/extend). */
+    boolean moving() {
+        return kind == Kind.MOVE;
+    }
+
     Sheet sheet() {
         return sheet;
     }

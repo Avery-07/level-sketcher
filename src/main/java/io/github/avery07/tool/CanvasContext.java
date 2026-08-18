@@ -28,6 +28,12 @@ public interface CanvasContext {
     /** Sheet-local coordinates → world point. */
     Vec2 localToWorld(Sheet sheet, double localX, double localY);
 
+    /**
+     * Snap a sheet-local point to the active snapping helpers (grid), or return it unchanged when
+     * snapping is off. Drawing tools route the points they place through here.
+     */
+    Vec2 snap(Sheet sheet, Vec2 local);
+
     /** Topmost sheet under a world point, or {@code null}. */
     Sheet topmostSheetAt(Vec2 world);
 

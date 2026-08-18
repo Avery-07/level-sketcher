@@ -48,7 +48,7 @@ public final class SymbolTool implements Tool {
             case MARKER, PARAMETRIC -> {
                 Sheet target = ctx.topmostSheetAt(world);
                 if (target != null) {
-                    place(ctx, target, List.of(ctx.worldToLocal(target, world)));
+                    place(ctx, target, List.of(ctx.snap(target, ctx.worldToLocal(target, world))));
                 }
             }
             case PATH, REGION -> {
@@ -67,7 +67,7 @@ public final class SymbolTool implements Tool {
                     finish(ctx);
                     return;
                 }
-                points.add(ctx.worldToLocal(sheet, world));
+                points.add(ctx.snap(sheet, ctx.worldToLocal(sheet, world)));
             }
         }
     }

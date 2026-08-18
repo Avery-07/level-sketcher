@@ -73,16 +73,26 @@ final class ElementEditor {
         }
     }
 
-    void update(Vec2 currentLocal) {
+    /**
+     * Snaps a proposed local point (grid and/or object alignment), or returns it unchanged. The
+     * editor applies it to positional handles only; angle/radius handles pass points through.
+     */
+    @FunctionalInterface
+    interface PointSnap {
+        Vec2 apply(Vec2 local);
+    }
+
+    void update(Vec2 currentLocal, PointSnap snap) {
         if (element == null) {
             return;
         }
         switch (kind) {
             case VERTEX -> {
                 List<Vec2> pts = points(element);
-                pts.set(index, pts.get(index).add(currentLocal.sub(lastLocal)));
+                Vec2 moved = pts.get(index).add(currentLocal.sub(lastLocal));
+                pts.set(index, snap.apply(moved));
             }
-            case EDGE -> moveEdge(currentLocal);
+            case EDGE -> moveEdge(currentLocal, snap);
             case RADIUS -> {
                 Circle c = (Circle) element;
                 c.setRadius(Math.max(MIN_RADIUS, currentLocal.distanceTo(c.center())));
@@ -104,16 +114,17 @@ final class ElementEditor {
             }
             case IMAGE_CORNER -> {
                 ImageElement img = (ImageElement) element;
-                img.setTopLeft(new Vec2(Math.min(imageFixedCorner.x(), currentLocal.x()),
-                        Math.min(imageFixedCorner.y(), currentLocal.y())));
-                img.setWidth(Math.max(1, Math.abs(currentLocal.x() - imageFixedCorner.x())));
-                img.setHeight(Math.max(1, Math.abs(currentLocal.y() - imageFixedCorner.y())));
+                Vec2 corner = snap.apply(currentLocal);
+                img.setTopLeft(new Vec2(Math.min(imageFixedCorner.x(), corner.x()),
+                        Math.min(imageFixedCorner.y(), corner.y())));
+                img.setWidth(Math.max(1, Math.abs(corner.x() - imageFixedCorner.x())));
+                img.setHeight(Math.max(1, Math.abs(corner.y() - imageFixedCorner.y())));
             }
         }
         lastLocal = currentLocal;
     }
 
-    private void moveEdge(Vec2 currentLocal) {
+    private void moveEdge(Vec2 currentLocal, PointSnap snap) {
         List<Vec2> pts = points(element);
         int n = pts.size();
         int a = index;
@@ -126,8 +137,16 @@ final class ElementEditor {
             b = 0;
         }
         Vec2 d = currentLocal.sub(lastLocal);
-        pts.set(a, pts.get(a).add(d));
-        pts.set(b, pts.get(b).add(d));
+        Vec2 na = pts.get(a).add(d);
+        Vec2 nb = pts.get(b).add(d);
+        // Snap one endpoint and shift the other by the same correction so the edge translates
+        // rigidly onto the target rather than shearing.
+        Vec2 corrected = snap.apply(na);
+        Vec2 delta = corrected.sub(na);
+        na = corrected;
+        nb = nb.add(delta);
+        pts.set(a, na);
+        pts.set(b, nb);
     }
 
     /** The undoable command for the completed edit, or {@code null} if nothing changed. */

@@ -54,7 +54,7 @@ public final class PolygonTool implements Tool {
             finish(ctx);
             return;
         }
-        localVertices.add(ctx.worldToLocal(sheet, world));
+        localVertices.add(ctx.snap(sheet, ctx.worldToLocal(sheet, world)));
     }
 
     @Override

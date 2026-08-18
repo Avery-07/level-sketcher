@@ -71,6 +71,8 @@ public final class App extends Application {
     private Button modeButton;
     private ButtonBase addSheetButton;
     private ToggleButton multiSelectButton;
+    private ToggleButton gridSnapButton;
+    private ToggleButton objectSnapButton;
 
     @Override
     public void start(Stage stage) {
@@ -130,7 +132,7 @@ public final class App extends Application {
 
     private VBox buildToolPalette() {
         VBox palette = new VBox(10, buildModeButton(), buildToolColumns(), buildMultiSelectButton(),
-                buildEditRow(), grow(), buildStyleControls());
+                buildSnapButtons(), buildEditRow(), grow(), buildStyleControls());
         palette.getStyleClass().add("tool-palette");
         palette.setPadding(new Insets(8));
         return palette;
@@ -179,6 +181,34 @@ public final class App extends Application {
             canvas.setMultiSelect(on);
         });
         return multiSelectButton;
+    }
+
+    private Node buildSnapButtons() {
+        gridSnapButton = new ToggleButton("Grid snap");
+        gridSnapButton.setMaxWidth(Double.MAX_VALUE);
+        gridSnapButton.setTooltip(new Tooltip(
+                "Snap to the sheet grid — drawing, moving, editing  (G).  Hold Alt to disable."));
+        gridSnapButton.setOnAction(e -> canvas.setGridSnap(gridSnapButton.isSelected()));
+
+        objectSnapButton = new ToggleButton("Object snap");
+        objectSnapButton.setMaxWidth(Double.MAX_VALUE);
+        objectSnapButton.setTooltip(new Tooltip(
+                "Snap a dragged object to others' edges and centres  (A).  Hold Alt to disable."));
+        objectSnapButton.setOnAction(e -> canvas.setObjectSnap(objectSnapButton.isSelected()));
+
+        HBox.setHgrow(gridSnapButton, Priority.ALWAYS);
+        HBox.setHgrow(objectSnapButton, Priority.ALWAYS);
+        return new HBox(4, gridSnapButton, objectSnapButton);
+    }
+
+    private void toggleGridSnap() {
+        gridSnapButton.setSelected(!gridSnapButton.isSelected());
+        canvas.setGridSnap(gridSnapButton.isSelected());
+    }
+
+    private void toggleObjectSnap() {
+        objectSnapButton.setSelected(!objectSnapButton.isSelected());
+        canvas.setObjectSnap(objectSnapButton.isSelected());
     }
 
     private void turnOffMultiSelect() {
@@ -286,6 +316,16 @@ public final class App extends Application {
             if (e.getCode() == KeyCode.TAB) {
                 setMode(document.editorMode() == EditorMode.ASSEMBLY
                         ? EditorMode.EDITION : EditorMode.ASSEMBLY);
+                e.consume();
+                return;
+            }
+            if (!e.isShortcutDown() && e.getCode() == KeyCode.G) {
+                toggleGridSnap(); // grid snap applies in both modes
+                e.consume();
+                return;
+            }
+            if (!e.isShortcutDown() && e.getCode() == KeyCode.A) {
+                toggleObjectSnap(); // object alignment applies in both modes
                 e.consume();
                 return;
             }

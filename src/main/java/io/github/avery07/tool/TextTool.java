@@ -20,7 +20,8 @@ public final class TextTool implements Tool {
         if (sheet == null) {
             return;
         }
-        TextElement text = new TextElement(ctx.worldToLocal(sheet, world), "Text", DEFAULT_SIZE);
+        TextElement text = new TextElement(
+                ctx.snap(sheet, ctx.worldToLocal(sheet, world)), "Text", DEFAULT_SIZE);
         text.setStyle(ctx.currentStyle());
         ctx.execute(new AddElementCommand(sheet, text));
         ctx.document().selectElement(sheet, text);

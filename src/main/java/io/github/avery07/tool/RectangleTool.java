@@ -27,7 +27,7 @@ public final class RectangleTool implements Tool {
         if (sheet == null) {
             return;
         }
-        startLocal = ctx.worldToLocal(sheet, world);
+        startLocal = ctx.snap(sheet, ctx.worldToLocal(sheet, world));
         currentLocal = startLocal;
         drawing = true;
     }
@@ -35,7 +35,7 @@ public final class RectangleTool implements Tool {
     @Override
     public void onDrag(CanvasContext ctx, PointerInput p) {
         if (drawing) {
-            currentLocal = ctx.worldToLocal(sheet, ctx.worldOf(p.x(), p.y()));
+            currentLocal = ctx.snap(sheet, ctx.worldToLocal(sheet, ctx.worldOf(p.x(), p.y())));
         }
     }
 

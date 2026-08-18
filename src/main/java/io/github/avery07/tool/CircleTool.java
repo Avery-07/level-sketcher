@@ -28,7 +28,7 @@ public final class CircleTool implements Tool {
         if (sheet == null) {
             return;
         }
-        centerLocal = ctx.worldToLocal(sheet, world);
+        centerLocal = ctx.snap(sheet, ctx.worldToLocal(sheet, world));
         radiusLocal = 0;
         drawing = true;
     }
@@ -36,7 +36,7 @@ public final class CircleTool implements Tool {
     @Override
     public void onDrag(CanvasContext ctx, PointerInput p) {
         if (drawing) {
-            Vec2 local = ctx.worldToLocal(sheet, ctx.worldOf(p.x(), p.y()));
+            Vec2 local = ctx.snap(sheet, ctx.worldToLocal(sheet, ctx.worldOf(p.x(), p.y())));
             radiusLocal = local.distanceTo(centerLocal);
         }
     }
