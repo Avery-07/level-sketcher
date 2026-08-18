@@ -35,7 +35,6 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
@@ -60,6 +59,7 @@ import java.util.Map;
 public final class App extends Application {
 
     private static final String APP_NAME = "LevelSketcher";
+    private static final double TOOL_BUTTON_WIDTH = 48; // compact, uniform icon buttons
 
     private final Document document = new Document();
     private final ToggleGroup toolGroup = new ToggleGroup();
@@ -140,8 +140,8 @@ public final class App extends Application {
     }
 
     private VBox buildToolPalette() {
-        VBox palette = new VBox(10, buildModeButton(), buildToolColumns(), buildMultiSelectButton(),
-                buildSnapButtons(), buildEditRow(), grow(), buildStyleControls());
+        VBox palette = new VBox(10, buildModeButton(), buildToolColumn(), buildMultiSelectButton(),
+                buildSnapButtons(), buildEditColumn(), grow(), buildStyleControls());
         palette.getStyleClass().add("tool-palette");
         palette.setPadding(new Insets(8));
         return palette;
@@ -156,24 +156,18 @@ public final class App extends Application {
         return modeButton;
     }
 
-    private Node buildToolColumns() {
+    /** All tools in one vertical column: sheet actions, then the drawing tools. */
+    private Node buildToolColumn() {
         addSheetButton = actionButton(Icons.addSheet(), "Add a sheet — then click or drag", canvas::armAddSheet);
-        VBox sheetColumn = new VBox(4, addSheetButton,
-                actionButton(Icons.trash(), "Delete selection (Del)", canvas::deleteSelected));
-
-        VBox drawColumn = new VBox(4,
+        return new VBox(4,
+                addSheetButton,
+                actionButton(Icons.trash(), "Delete selection (Del)", canvas::deleteSelected),
                 toolButton(Icons.rectangle(), Action.RECTANGLE, canvas::useRectangleTool),
                 toolButton(Icons.circle(), Action.CIRCLE, canvas::useCircleTool),
                 toolButton(Icons.polygon(), Action.POLYGON, canvas::usePolygonTool),
                 toolButton(Icons.freehand(), Action.FREEHAND, canvas::useFreehandTool),
                 toolButton(Icons.text(), Action.TEXT, canvas::useTextTool),
                 toolButton(Icons.eraser(), Action.ERASE, canvas::useEraserTool));
-
-        sheetColumn.setMaxWidth(Double.MAX_VALUE);
-        drawColumn.setMaxWidth(Double.MAX_VALUE);
-        HBox.setHgrow(sheetColumn, Priority.ALWAYS);
-        HBox.setHgrow(drawColumn, Priority.ALWAYS);
-        return new HBox(4, sheetColumn, drawColumn);
     }
 
     private Node buildMultiSelectButton() {
@@ -200,9 +194,7 @@ public final class App extends Application {
         objectSnapButton.setMaxWidth(Double.MAX_VALUE);
         objectSnapButton.setOnAction(e -> canvas.setObjectSnap(objectSnapButton.isSelected()));
 
-        HBox.setHgrow(gridSnapButton, Priority.ALWAYS);
-        HBox.setHgrow(objectSnapButton, Priority.ALWAYS);
-        return new HBox(4, gridSnapButton, objectSnapButton);
+        return new VBox(4, gridSnapButton, objectSnapButton);
     }
 
     private void toggleGridSnap() {
@@ -222,12 +214,10 @@ public final class App extends Application {
         canvas.setMultiSelect(false);
     }
 
-    private Node buildEditRow() {
+    private Node buildEditColumn() {
         Button undo = glyphButton("↶", "Undo (Ctrl+Z)", canvas::undo);
         Button redo = glyphButton("↷", "Redo (Ctrl+Y)", canvas::redo);
-        HBox.setHgrow(undo, Priority.ALWAYS);
-        HBox.setHgrow(redo, Priority.ALWAYS);
-        return new HBox(4, undo, redo);
+        return new VBox(4, undo, redo);
     }
 
     /** The "current draw style" controls: what newly drawn shapes inherit. */
@@ -261,7 +251,7 @@ public final class App extends Application {
     private ToggleButton toolButton(Node icon, Action action, Runnable activate) {
         ToggleButton button = new ToggleButton();
         button.setGraphic(icon);
-        button.setMaxWidth(Double.MAX_VALUE);
+        button.setPrefWidth(TOOL_BUTTON_WIDTH);
         button.setToggleGroup(toolGroup);
         button.setOnAction(e -> {
             if (button.isSelected()) {
@@ -280,7 +270,7 @@ public final class App extends Application {
     private Button actionButton(Node icon, String tip, Runnable action) {
         Button button = new Button();
         button.setGraphic(icon);
-        button.setMaxWidth(Double.MAX_VALUE);
+        button.setPrefWidth(TOOL_BUTTON_WIDTH);
         button.setTooltip(new Tooltip(tip));
         button.setOnAction(e -> action.run());
         return button;

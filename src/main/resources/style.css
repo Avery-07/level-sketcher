@@ -59,7 +59,7 @@
 .tool-icon {
     -fx-fill: transparent;
     -fx-stroke: #44474d;
-    -fx-stroke-width: 1.6;
+    -fx-stroke-width: 1.1; /* scaled ~1.6x by Icons.SCALE */
     -fx-stroke-line-join: round;
     -fx-stroke-line-cap: round;
 }

@@ -1,5 +1,6 @@
 package io.github.avery07.ui;
 
+import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Polygon;
@@ -12,6 +13,9 @@ import javafx.scene.shape.SVGPath;
  * {@code .tool-icon} CSS class (so they pick up the accent colour when their tool is selected).
  */
 public final class Icons {
+
+    /** Uniform scale applied to every icon (designed at ~16px, enlarged for the toolbar). */
+    private static final double SCALE = 1.6;
 
     private Icons() {
     }
@@ -65,6 +69,9 @@ public final class Icons {
 
     private static Node styled(Node shape) {
         shape.getStyleClass().add("tool-icon");
-        return shape;
+        shape.setScaleX(SCALE);
+        shape.setScaleY(SCALE);
+        // Wrap so the (scaled) size is reflected in layout bounds, sizing the button correctly.
+        return new Group(shape);
     }
 }
