@@ -21,6 +21,7 @@ import javafx.scene.control.ButtonBase;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
@@ -32,6 +33,7 @@ import javafx.scene.control.TextInputControl;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
+import javafx.util.StringConverter;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.BorderPane;
@@ -70,7 +72,7 @@ public final class App extends Application {
 
     private Stage stage;
     private CanvasView canvas;
-    private Button modeButton;
+    private ComboBox<EditorMode> modeSelector;
     private ButtonBase addSheetButton;
     private ToggleButton multiSelectButton;
     private ToggleButton gridSnapButton;
@@ -140,20 +142,41 @@ public final class App extends Application {
     }
 
     private VBox buildToolPalette() {
-        VBox palette = new VBox(10, buildModeButton(), buildToolColumn(), buildMultiSelectButton(),
+        VBox palette = new VBox(10, buildModeSelector(), buildToolColumn(), buildMultiSelectButton(),
                 buildSnapButtons(), buildEditColumn(), grow(), buildStyleControls());
         palette.getStyleClass().add("tool-palette");
         palette.setPadding(new Insets(8));
         return palette;
     }
 
-    private Node buildModeButton() {
-        modeButton = new Button();
-        modeButton.setMaxWidth(Double.MAX_VALUE);
-        modeButton.getStyleClass().add("mode-button");
-        modeButton.setOnAction(e -> setMode(document.editorMode() == EditorMode.ASSEMBLY
-                ? EditorMode.EDITION : EditorMode.ASSEMBLY));
-        return modeButton;
+    private Node buildModeSelector() {
+        modeSelector = new ComboBox<>();
+        modeSelector.getItems().addAll(EditorMode.ASSEMBLY, EditorMode.EDITION);
+        modeSelector.setValue(document.editorMode());
+        modeSelector.setMaxWidth(Double.MAX_VALUE);
+        modeSelector.getStyleClass().add("mode-selector");
+        modeSelector.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(EditorMode mode) {
+                return mode == null ? "" : modeLabel(mode);
+            }
+
+            @Override
+            public EditorMode fromString(String s) {
+                return null;
+            }
+        });
+        // Guarded so programmatic sync (from the Tab shortcut) doesn't loop back into setMode.
+        modeSelector.valueProperty().addListener((o, ov, nv) -> {
+            if (nv != null && nv != document.editorMode()) {
+                setMode(nv);
+            }
+        });
+        return modeSelector;
+    }
+
+    private static String modeLabel(EditorMode mode) {
+        return mode == EditorMode.ASSEMBLY ? "Assembly" : "Edition";
     }
 
     /** All tools in one vertical column: sheet actions, then the drawing tools. */
@@ -293,10 +316,12 @@ public final class App extends Application {
         syncModeUi();
     }
 
-    /** Reflect the current mode in the button label + which palette items are enabled. */
+    /** Reflect the current mode in the selector + which palette items are enabled. */
     private void syncModeUi() {
         boolean assembly = document.editorMode() == EditorMode.ASSEMBLY;
-        modeButton.setText(assembly ? "Assembly" : "Edition");
+        if (modeSelector.getValue() != document.editorMode()) {
+            modeSelector.setValue(document.editorMode());
+        }
         drawButtons.forEach(b -> b.setDisable(assembly));
         addSheetButton.setDisable(!assembly);
     }
@@ -346,7 +371,7 @@ public final class App extends Application {
     /** Refresh every tooltip that shows a shortcut so it reflects the current bindings. */
     private void refreshShortcutHints() {
         actionButtons.forEach((a, b) -> b.setTooltip(new Tooltip(a.label() + "  (" + bindings.keyText(a) + ")")));
-        modeButton.setTooltip(new Tooltip("Switch Assembly / Edition  (" + bindings.keyText(Action.TOGGLE_MODE) + ")"));
+        modeSelector.setTooltip(new Tooltip("Assembly / Edition  (toggle with " + bindings.keyText(Action.TOGGLE_MODE) + ")"));
         gridSnapButton.setTooltip(new Tooltip("Snap to the sheet grid — drawing, moving, editing  ("
                 + bindings.keyText(Action.GRID_SNAP) + ").  Hold Alt to disable."));
         objectSnapButton.setTooltip(new Tooltip("Snap a dragged object to others' edges and centres  ("

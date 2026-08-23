@@ -44,16 +44,20 @@
     -fx-text-fill: -accent;
 }
 
-.mode-button {
+.mode-selector {
     -fx-background-color: #eef0f3;
-    -fx-font-weight: bold;
-    -fx-text-fill: #2f3136;
     -fx-background-radius: 8;
-    -fx-padding: 7 10 7 10;
 }
 
-.mode-button:hover {
+.mode-selector:hover {
     -fx-background-color: #e2e5ea;
+}
+
+.mode-selector > .list-cell {
+    -fx-background-color: transparent;
+    -fx-font-weight: bold;
+    -fx-text-fill: #2f3136;
+    -fx-padding: 6 8 6 8;
 }
 
 .tool-icon {
