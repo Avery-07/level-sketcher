@@ -866,6 +866,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
             default -> { }
         }
         mode = Mode.NONE;
+        requestRender(); // clear any transient overlay (marquee box, sheet-create preview)
     }
 
     /** Turn the rubber-banded region into a sheet: a real drag sizes it, an armed click uses defaults. */
