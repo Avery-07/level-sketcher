@@ -13,6 +13,7 @@ import io.github.avery07.view.CanvasView;
 import javafx.application.Application;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
@@ -62,6 +63,7 @@ public final class App extends Application {
 
     private static final String APP_NAME = "LevelSketcher";
     private static final double TOOL_BUTTON_WIDTH = 48; // compact, uniform icon buttons
+    private static final double TOOLBAR_WIDTH = 116;     // narrow, fixed palette width
 
     private final Document document = new Document();
     private final ToggleGroup toolGroup = new ToggleGroup();
@@ -145,7 +147,11 @@ public final class App extends Application {
         VBox palette = new VBox(10, buildModeSelector(), buildToolColumn(), buildMultiSelectButton(),
                 buildSnapButtons(), buildEditColumn(), grow(), buildStyleControls());
         palette.getStyleClass().add("tool-palette");
-        palette.setPadding(new Insets(8));
+        palette.setPadding(new Insets(6));
+        palette.setAlignment(Pos.TOP_CENTER);
+        palette.setPrefWidth(TOOLBAR_WIDTH);
+        palette.setMinWidth(TOOLBAR_WIDTH);
+        palette.setMaxWidth(TOOLBAR_WIDTH);
         return palette;
     }
 
@@ -154,6 +160,7 @@ public final class App extends Application {
         modeSelector.getItems().addAll(EditorMode.ASSEMBLY, EditorMode.EDITION);
         modeSelector.setValue(document.editorMode());
         modeSelector.setMaxWidth(Double.MAX_VALUE);
+        modeSelector.setMinWidth(0); // don't let its default min prop the palette open
         modeSelector.getStyleClass().add("mode-selector");
         modeSelector.setConverter(new StringConverter<>() {
             @Override
@@ -182,7 +189,7 @@ public final class App extends Application {
     /** All tools in one vertical column: sheet actions, then the drawing tools. */
     private Node buildToolColumn() {
         addSheetButton = actionButton(Icons.addSheet(), "Add a sheet — then click or drag", canvas::armAddSheet);
-        return new VBox(4,
+        VBox column = new VBox(4,
                 addSheetButton,
                 actionButton(Icons.trash(), "Delete selection (Del)", canvas::deleteSelected),
                 toolButton(Icons.rectangle(), Action.RECTANGLE, canvas::useRectangleTool),
@@ -191,11 +198,15 @@ public final class App extends Application {
                 toolButton(Icons.freehand(), Action.FREEHAND, canvas::useFreehandTool),
                 toolButton(Icons.text(), Action.TEXT, canvas::useTextTool),
                 toolButton(Icons.eraser(), Action.ERASE, canvas::useEraserTool));
+        column.setAlignment(Pos.CENTER);
+        column.setMaxWidth(Double.MAX_VALUE);
+        return column;
     }
 
     private Node buildMultiSelectButton() {
         multiSelectButton = new ToggleButton("Multi-select");
         multiSelectButton.setMaxWidth(Double.MAX_VALUE);
+        multiSelectButton.setMinWidth(0);
         multiSelectButton.setTooltip(new Tooltip(
                 "Select multiple — drag a box to add, drag a selected item to move, right-click to clear"));
         multiSelectButton.setOnAction(e -> {
@@ -212,13 +223,17 @@ public final class App extends Application {
     private Node buildSnapButtons() {
         gridSnapButton = new ToggleButton("Grid snap");
         gridSnapButton.setMaxWidth(Double.MAX_VALUE);
+        gridSnapButton.setMinWidth(0);
         gridSnapButton.setOnAction(e -> canvas.setGridSnap(gridSnapButton.isSelected()));
 
         objectSnapButton = new ToggleButton("Object snap");
         objectSnapButton.setMaxWidth(Double.MAX_VALUE);
+        objectSnapButton.setMinWidth(0);
         objectSnapButton.setOnAction(e -> canvas.setObjectSnap(objectSnapButton.isSelected()));
 
-        return new VBox(4, gridSnapButton, objectSnapButton);
+        VBox column = new VBox(4, gridSnapButton, objectSnapButton);
+        column.setAlignment(Pos.CENTER);
+        return column;
     }
 
     private void toggleGridSnap() {
@@ -241,7 +256,9 @@ public final class App extends Application {
     private Node buildEditColumn() {
         Button undo = glyphButton("↶", "Undo (Ctrl+Z)", canvas::undo);
         Button redo = glyphButton("↷", "Redo (Ctrl+Y)", canvas::redo);
-        return new VBox(4, undo, redo);
+        VBox column = new VBox(4, undo, redo);
+        column.setAlignment(Pos.CENTER);
+        return column;
     }
 
     /** The "current draw style" controls: what newly drawn shapes inherit. */
@@ -249,14 +266,17 @@ public final class App extends Application {
         Style style = document.currentStyle();
         ColorPicker stroke = new ColorPicker(Color.web(style.stroke()));
         stroke.setMaxWidth(Double.MAX_VALUE);
+        stroke.setMinWidth(0);
         CheckBox fillOn = new CheckBox("Fill");
         fillOn.setSelected(style.fill() != null);
         ColorPicker fill = new ColorPicker(style.fill() != null ? Color.web(style.fill()) : Color.web("#cfe0ff"));
         fill.setMaxWidth(Double.MAX_VALUE);
+        fill.setMinWidth(0);
         Spinner<Double> width = new Spinner<>();
         width.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(0.5, 20, style.strokeWidth(), 0.5));
         width.setEditable(true);
         width.setMaxWidth(Double.MAX_VALUE);
+        width.setMinWidth(0);
 
         Runnable apply = () -> document.setCurrentStyle(new Style(
                 Colors.toHex(stroke.getValue()),
@@ -269,7 +289,9 @@ public final class App extends Application {
 
         Label caption = new Label("New shape");
         caption.getStyleClass().add("toolbar-caption");
-        return new VBox(4, caption, new Label("Stroke"), stroke, fillOn, fill, new Label("Width"), width);
+        VBox column = new VBox(4, caption, new Label("Stroke"), stroke, fillOn, fill, new Label("Width"), width);
+        column.setAlignment(Pos.CENTER);
+        return column;
     }
 
     private ToggleButton toolButton(Node icon, Action action, Runnable activate) {
