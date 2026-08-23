@@ -72,7 +72,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private static final double PASTE_OFFSET = 24;    // offset applied to a pasted copy
 
     private enum Mode { NONE, PAN, SHEET, SHEET_CREATE, ELEMENT, ELEMENT_EDIT, TOOL,
-        MULTI_ELEMENTS, MULTI_SHEETS }
+        MULTI_ELEMENTS, MULTI_SHEETS, MARQUEE }
 
     private final Document document;
     private final Viewport viewport = new Viewport();
@@ -127,8 +127,11 @@ public final class CanvasView extends StackPane implements CanvasContext {
     private boolean pendingSheetPlacement; // armed by the Add Sheet button
     private boolean armedStandardIfClick;  // a plain click while armed drops a standard sheet
 
-    // Multi-select (toggle button): click to accumulate, drag to move the whole set.
+    // Multi-select (toggle button): drag a box to accumulate, drag a selected item to move,
+    // right-click to clear.
     private boolean multiSelect;
+    private Vec2 marqueeStartWorld;   // rubber-band selection rectangle (world space)
+    private Vec2 marqueeCurrentWorld;
     private final List<Element> multiElements = new ArrayList<>();
     private Sheet multiOwner;
     private Vec2 multiRefStart;   // combined bounds min corner at press (local)
@@ -475,6 +478,9 @@ public final class CanvasView extends StackPane implements CanvasContext {
         if (mode == Mode.SHEET_CREATE) {
             paintSheetCreatePreview(overlay.getGraphicsContext2D());
         }
+        if (mode == Mode.MARQUEE) {
+            paintMarquee(overlay.getGraphicsContext2D());
+        }
         if (!alignGuidesWorld.isEmpty()) {
             paintAlignGuides(overlay.getGraphicsContext2D());
         }
@@ -504,6 +510,24 @@ public final class CanvasView extends StackPane implements CanvasContext {
         g.setStroke(javafx.scene.paint.Color.web("#3b82f6"));
         g.setLineWidth(1.5);
         g.setLineDashes(5, 4);
+        g.strokeRect(x, y, w, h);
+        g.setLineDashes(null);
+    }
+
+    /** The rubber-band selection rectangle, in screen space. */
+    private void paintMarquee(javafx.scene.canvas.GraphicsContext g) {
+        if (marqueeStartWorld == null || marqueeCurrentWorld == null) {
+            return;
+        }
+        Vec2 a = viewport.toScreen(marqueeStartWorld);
+        Vec2 b = viewport.toScreen(marqueeCurrentWorld);
+        double x = Math.min(a.x(), b.x()), y = Math.min(a.y(), b.y());
+        double w = Math.abs(a.x() - b.x()), h = Math.abs(a.y() - b.y());
+        g.setFill(javafx.scene.paint.Color.rgb(59, 130, 246, 0.10));
+        g.fillRect(x, y, w, h);
+        g.setStroke(javafx.scene.paint.Color.web("#3b82f6"));
+        g.setLineWidth(1);
+        g.setLineDashes(4, 3);
         g.strokeRect(x, y, w, h);
         g.setLineDashes(null);
     }
@@ -570,14 +594,10 @@ public final class CanvasView extends StackPane implements CanvasContext {
             if (owner == null) {
                 owner = sheetLabelAt(sx, sy);
             }
-            if (owner != null) {
-                if (!document.selectedSheets().contains(owner)) {
-                    document.addSelectedSheet(owner);
-                }
-                beginMultiSheetMove(world);
+            if (owner != null && document.selectedSheets().contains(owner)) {
+                beginMultiSheetMove(world); // drag an already-selected sheet to move the set
             } else {
-                document.clearSelection();
-                beginPan(sx, sy);
+                beginMarquee(world);        // drag a box to select (accumulate)
             }
             return;
         }
@@ -639,14 +659,10 @@ public final class CanvasView extends StackPane implements CanvasContext {
         if (multiSelect) {
             Sheet owner = topmostAt(world);
             Element shape = owner != null ? topmostElementIn(owner, world) : null;
-            if (shape != null) {
-                if (!document.selectedElements().contains(shape)) {
-                    document.addSelectedElement(owner, shape);
-                }
-                beginMultiElementMove(owner, world);
+            if (shape != null && document.selectedElements().contains(shape)) {
+                beginMultiElementMove(owner, world); // drag a selected element to move the set
             } else {
-                document.clearSelection();
-                beginPan(sx, sy);
+                beginMarquee(world);                 // drag a box to select (accumulate)
             }
             return;
         }
@@ -694,8 +710,12 @@ public final class CanvasView extends StackPane implements CanvasContext {
         beginPan(sx, sy);
     }
 
-    /** Right-click opens the inspector: a shape's style in edition, a sheet's name + layers. */
+    /** Right-click opens the inspector; while multi-selecting it clears the whole selection. */
     private void onRightClick(MouseEvent e) {
+        if (multiSelect) {
+            document.clearSelection();
+            return;
+        }
         Vec2 world = worldOf(e.getX(), e.getY());
         if (document.editorMode() == EditorMode.EDITION) {
             Sheet owner = topmostAt(world);
@@ -796,6 +816,10 @@ public final class CanvasView extends StackPane implements CanvasContext {
                 multiSheetDrag(worldOf(e.getX(), e.getY()));
                 requestRender();
             }
+            case MARQUEE -> {
+                marqueeCurrentWorld = worldOf(e.getX(), e.getY());
+                requestRender();
+            }
             default -> { }
         }
     }
@@ -838,6 +862,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
             case SHEET_CREATE -> finishSheetCreate();
             case MULTI_ELEMENTS -> commitMultiElementMove();
             case MULTI_SHEETS -> commitMultiSheetMove();
+            case MARQUEE -> commitMarquee();
             default -> { }
         }
         mode = Mode.NONE;
@@ -1259,6 +1284,67 @@ public final class CanvasView extends StackPane implements CanvasContext {
         multiSheets.clear();
         multiSheetStart.clear();
         clearAlignGuides();
+    }
+
+    // ----- marquee (rubber-band) selection -----
+
+    private void beginMarquee(Vec2 world) {
+        marqueeStartWorld = world;
+        marqueeCurrentWorld = world;
+        mode = Mode.MARQUEE;
+    }
+
+    /** On release, add everything the box touches to the selection (accumulate). */
+    private void commitMarquee() {
+        if (marqueeStartWorld != null && marqueeCurrentWorld != null) {
+            Rect box = Rect.of(marqueeStartWorld.x(), marqueeStartWorld.y(),
+                    marqueeCurrentWorld.x(), marqueeCurrentWorld.y());
+            if (document.editorMode() == EditorMode.ASSEMBLY) {
+                for (Sheet s : document.workspace().sheets()) {
+                    if (sheetWorldBounds(s).intersects(box)) {
+                        document.addSelectedSheet(s);
+                    }
+                }
+            } else {
+                marqueeSelectElements(box);
+            }
+        }
+        marqueeStartWorld = null;
+        marqueeCurrentWorld = null;
+    }
+
+    /** Add the topmost intersecting sheet's active-layer elements that the box touches. */
+    private void marqueeSelectElements(Rect box) {
+        var sheets = document.workspace().sheets();
+        Sheet target = null;
+        for (int i = sheets.size() - 1; i >= 0; i--) {
+            if (sheetWorldBounds(sheets.get(i)).intersects(box)) {
+                target = sheets.get(i);
+                break;
+            }
+        }
+        if (target == null || target.activeLayer() == null) {
+            return;
+        }
+        for (Element el : target.activeLayer().elements()) {
+            if (elementWorldBounds(target, el).intersects(box)) {
+                document.addSelectedElement(target, el);
+            }
+        }
+    }
+
+    /** An element's world-space axis-aligned bounds (its local bbox corners, transformed). */
+    private Rect elementWorldBounds(Sheet s, Element e) {
+        Rect b = e.bounds();
+        double[][] corners = {{b.minX(), b.minY()}, {b.maxX(), b.minY()},
+                {b.maxX(), b.maxY()}, {b.minX(), b.maxY()}};
+        Vec2 first = SheetGeometry.localToWorld(s, corners[0][0], corners[0][1]);
+        Rect out = new Rect(first.x(), first.y(), first.x(), first.y());
+        for (int i = 1; i < corners.length; i++) {
+            Vec2 w = SheetGeometry.localToWorld(s, corners[i][0], corners[i][1]);
+            out = out.union(new Rect(w.x(), w.y(), w.x(), w.y()));
+        }
+        return out;
     }
 
     // ----- rename editor -----

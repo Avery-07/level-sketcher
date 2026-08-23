@@ -196,7 +196,8 @@ public final class App extends Application {
     private Node buildMultiSelectButton() {
         multiSelectButton = new ToggleButton("Multi-select");
         multiSelectButton.setMaxWidth(Double.MAX_VALUE);
-        multiSelectButton.setTooltip(new Tooltip("Select multiple objects — click to add, drag to move together"));
+        multiSelectButton.setTooltip(new Tooltip(
+                "Select multiple — drag a box to add, drag a selected item to move, right-click to clear"));
         multiSelectButton.setOnAction(e -> {
             boolean on = multiSelectButton.isSelected();
             if (on) {

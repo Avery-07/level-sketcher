@@ -26,4 +26,10 @@ public record Rect(double minX, double minY, double maxX, double maxY) {
     public Rect translate(double dx, double dy) {
         return new Rect(minX + dx, minY + dy, maxX + dx, maxY + dy);
     }
+
+    /** True if this rectangle overlaps {@code other} (touching edges count). */
+    public boolean intersects(Rect other) {
+        return minX <= other.maxX && maxX >= other.minX
+                && minY <= other.maxY && maxY >= other.minY;
+    }
 }
