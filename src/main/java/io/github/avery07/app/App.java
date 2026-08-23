@@ -10,6 +10,7 @@ import io.github.avery07.persistence.SvgExporter;
 import io.github.avery07.ui.Colors;
 import io.github.avery07.ui.Icons;
 import io.github.avery07.ui.ShortcutsDialog;
+import javafx.animation.PauseTransition;
 import io.github.avery07.view.CanvasView;
 import javafx.application.Application;
 import javafx.embed.swing.SwingFXUtils;
@@ -24,6 +25,7 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
@@ -45,6 +47,7 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import javax.imageio.ImageIO;
 import java.io.File;
@@ -80,6 +83,10 @@ public final class App extends Application {
     private ToggleButton multiSelectButton;
     private ToggleButton gridSnapButton;
     private ToggleButton objectSnapButton;
+    private ToggleButton symbolButton;
+    private SymbolType lastSymbol;      // last symbol placed, for the one-click "place symbols" button
+    private javafx.stage.Popup symbolFlyout;
+    private final PauseTransition flyoutHide = new PauseTransition(Duration.millis(180));
 
     @Override
     public void start(Stage stage) {
@@ -145,7 +152,7 @@ public final class App extends Application {
     }
 
     private VBox buildToolPalette() {
-        VBox palette = new VBox(10, buildModeSelector(), buildToolColumn(), buildSymbolColumn(),
+        VBox palette = new VBox(10, buildModeSelector(), buildToolColumn(), buildSymbolButton(),
                 buildMultiSelectButton(), buildSnapButtons(), buildEditColumn(), grow(), buildStyleControls());
         palette.getStyleClass().add("tool-palette");
         palette.setPadding(new Insets(6));
@@ -204,32 +211,87 @@ public final class App extends Application {
         return column;
     }
 
-    /** Placement buttons for each symbol type (POI, Zone, Sight Cone, Route, …). */
-    private Node buildSymbolColumn() {
-        VBox column = new VBox(4);
-        column.setAlignment(Pos.CENTER);
-        for (SymbolType type : document.symbolLibrary().types()) {
-            column.getChildren().add(symbolButton(type));
-        }
-        return column;
-    }
-
-    private ToggleButton symbolButton(SymbolType type) {
-        ToggleButton button = new ToggleButton();
-        button.setGraphic(Icons.symbol(type.pattern(), type.color()));
-        button.setPrefWidth(TOOL_BUTTON_WIDTH);
-        button.setToggleGroup(toolGroup);
-        button.setTooltip(new Tooltip("Place " + type.name()));
-        button.setOnAction(e -> {
-            if (button.isSelected()) {
-                turnOffMultiSelect();
-                canvas.useSymbolTool(type);
+    /**
+     * A single "place symbols" button. Clicking it places the last-used symbol (POI by default);
+     * hovering reveals the full list of symbol types to the side to pick a different one.
+     */
+    private Node buildSymbolButton() {
+        symbolButton = new ToggleButton();
+        symbolButton.setPrefWidth(TOOL_BUTTON_WIDTH);
+        symbolButton.setToggleGroup(toolGroup);
+        drawButtons.add(symbolButton); // a content tool: disabled in Assembly, like the drawing tools
+        updateSymbolButtonGraphic();
+        symbolButton.setOnAction(e -> {
+            if (symbolButton.isSelected()) {
+                activateSymbol(defaultSymbol());
             } else {
                 canvas.clearTool();
             }
         });
-        drawButtons.add(button); // a content tool: disabled in Assembly, like the drawing tools
-        return button;
+        symbolButton.setOnMouseEntered(e -> showSymbolFlyout());
+        symbolButton.setOnMouseExited(e -> flyoutHide.playFromStart());
+        flyoutHide.setOnFinished(e -> hideSymbolFlyout());
+        return symbolButton;
+    }
+
+    /** The last symbol placed, or the first library type (POI) if none yet. */
+    private SymbolType defaultSymbol() {
+        return lastSymbol != null ? lastSymbol : document.symbolLibrary().types().get(0);
+    }
+
+    private void updateSymbolButtonGraphic() {
+        SymbolType t = defaultSymbol();
+        symbolButton.setGraphic(Icons.symbol(t.pattern(), t.color()));
+        symbolButton.setTooltip(new Tooltip("Place " + t.name() + " — hover for other symbols"));
+    }
+
+    /** Activate a symbol tool, remember it as the last used, and reflect it on the button. */
+    private void activateSymbol(SymbolType type) {
+        lastSymbol = type;
+        updateSymbolButtonGraphic();
+        turnOffMultiSelect();
+        symbolButton.setSelected(true);
+        canvas.useSymbolTool(type);
+    }
+
+    private void showSymbolFlyout() {
+        if (symbolFlyout == null) {
+            buildSymbolFlyout();
+        }
+        flyoutHide.stop();
+        if (!symbolFlyout.isShowing()) {
+            var b = symbolButton.localToScreen(symbolButton.getLayoutBounds());
+            symbolFlyout.show(symbolButton, b.getMaxX() + 2, b.getMinY());
+        }
+    }
+
+    private void hideSymbolFlyout() {
+        if (symbolFlyout != null) {
+            symbolFlyout.hide();
+        }
+    }
+
+    private void buildSymbolFlyout() {
+        VBox menu = new VBox(2);
+        menu.getStyleClass().add("symbol-flyout");
+        for (SymbolType type : document.symbolLibrary().types()) {
+            Button item = new Button(type.name());
+            item.setGraphic(Icons.symbol(type.pattern(), type.color()));
+            item.setContentDisplay(ContentDisplay.LEFT);
+            item.setGraphicTextGap(10);
+            item.setMaxWidth(Double.MAX_VALUE);
+            item.setAlignment(Pos.CENTER_LEFT);
+            item.setOnAction(e -> {
+                activateSymbol(type);
+                hideSymbolFlyout();
+            });
+            menu.getChildren().add(item);
+        }
+        menu.setOnMouseEntered(e -> flyoutHide.stop());
+        menu.setOnMouseExited(e -> flyoutHide.playFromStart());
+        symbolFlyout = new javafx.stage.Popup();
+        symbolFlyout.setAutoHide(true);
+        symbolFlyout.getContent().add(menu);
     }
 
     private Node buildMultiSelectButton() {
