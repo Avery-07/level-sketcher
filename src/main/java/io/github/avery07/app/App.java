@@ -10,6 +10,7 @@ import io.github.avery07.persistence.SvgExporter;
 import io.github.avery07.ui.Colors;
 import io.github.avery07.ui.Icons;
 import io.github.avery07.ui.ShortcutsDialog;
+import io.github.avery07.ui.SymbolsDialog;
 import javafx.animation.PauseTransition;
 import io.github.avery07.view.CanvasView;
 import javafx.application.Application;
@@ -135,16 +136,8 @@ public final class App extends Application {
                 importImg, new SeparatorMenuItem(), exportPng, exportSvg, exportJson);
 
         Menu systems = new Menu("Systems");
-        for (io.github.avery07.model.symbol.SymbolType type : document.symbolLibrary().types()) {
-            MenuItem item = new MenuItem(type.name());
-            item.setOnAction(e -> {
-                setMode(EditorMode.EDITION);
-                turnOffMultiSelect();
-                toolGroup.selectToggle(null);
-                canvas.useSymbolTool(type);
-            });
-            systems.getItems().add(item);
-        }
+        systems.getItems().add(menuItem("Manage Symbols…", null,
+                () -> SymbolsDialog.show(stage, document.symbolLibrary(), this::refreshSymbols)));
 
         Menu settings = new Menu("Settings");
         MenuItem shortcuts = menuItem("Keyboard Shortcuts…", null,
@@ -272,6 +265,18 @@ public final class App extends Application {
     private void hideSymbolFlyout() {
         if (symbolFlyout != null) {
             symbolFlyout.hide();
+        }
+    }
+
+    /** Reflect edits to the symbol presets: refresh the button icon and rebuild the flyout. */
+    private void refreshSymbols() {
+        if (lastSymbol != null && !document.symbolLibrary().types().contains(lastSymbol)) {
+            lastSymbol = null; // the last-used preset was removed
+        }
+        updateSymbolButtonGraphic();
+        if (symbolFlyout != null) {
+            symbolFlyout.hide();
+            symbolFlyout = null; // rebuilt from the current library on the next hover
         }
     }
 

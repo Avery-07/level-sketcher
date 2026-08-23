@@ -10,9 +10,9 @@ import java.util.List;
 public final class SymbolType {
 
     private final String id;
-    private final String name;
+    private String name;
     private final PlacementPattern pattern;
-    private final String color; // hex, e.g. "#22c55e"
+    private String color; // hex, e.g. "#22c55e"
     private final List<ParameterDef> parameters;
 
     public SymbolType(String id, String name, PlacementPattern pattern, String color,
@@ -32,12 +32,22 @@ public final class SymbolType {
         return name;
     }
 
+    /** Rename the preset (affects the palette and future placements, not existing instances). */
+    public void setName(String name) {
+        this.name = name;
+    }
+
     public PlacementPattern pattern() {
         return pattern;
     }
 
     public String color() {
         return color;
+    }
+
+    /** Recolour the preset (affects the palette and future placements, not existing instances). */
+    public void setColor(String color) {
+        this.color = color;
     }
 
     public List<ParameterDef> parameters() {
