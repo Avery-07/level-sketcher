@@ -3,6 +3,7 @@ package io.github.avery07.app;
 import io.github.avery07.document.Document;
 import io.github.avery07.document.EditorMode;
 import io.github.avery07.model.Style;
+import io.github.avery07.model.symbol.SymbolType;
 import io.github.avery07.app.KeyBindings.Action;
 import io.github.avery07.persistence.ProjectIo;
 import io.github.avery07.persistence.SvgExporter;
@@ -144,8 +145,8 @@ public final class App extends Application {
     }
 
     private VBox buildToolPalette() {
-        VBox palette = new VBox(10, buildModeSelector(), buildToolColumn(), buildMultiSelectButton(),
-                buildSnapButtons(), buildEditColumn(), grow(), buildStyleControls());
+        VBox palette = new VBox(10, buildModeSelector(), buildToolColumn(), buildSymbolColumn(),
+                buildMultiSelectButton(), buildSnapButtons(), buildEditColumn(), grow(), buildStyleControls());
         palette.getStyleClass().add("tool-palette");
         palette.setPadding(new Insets(6));
         palette.setAlignment(Pos.TOP_CENTER);
@@ -201,6 +202,34 @@ public final class App extends Application {
         column.setAlignment(Pos.CENTER);
         column.setMaxWidth(Double.MAX_VALUE);
         return column;
+    }
+
+    /** Placement buttons for each symbol type (POI, Zone, Sight Cone, Route, …). */
+    private Node buildSymbolColumn() {
+        VBox column = new VBox(4);
+        column.setAlignment(Pos.CENTER);
+        for (SymbolType type : document.symbolLibrary().types()) {
+            column.getChildren().add(symbolButton(type));
+        }
+        return column;
+    }
+
+    private ToggleButton symbolButton(SymbolType type) {
+        ToggleButton button = new ToggleButton();
+        button.setGraphic(Icons.symbol(type.pattern(), type.color()));
+        button.setPrefWidth(TOOL_BUTTON_WIDTH);
+        button.setToggleGroup(toolGroup);
+        button.setTooltip(new Tooltip("Place " + type.name()));
+        button.setOnAction(e -> {
+            if (button.isSelected()) {
+                turnOffMultiSelect();
+                canvas.useSymbolTool(type);
+            } else {
+                canvas.clearTool();
+            }
+        });
+        drawButtons.add(button); // a content tool: disabled in Assembly, like the drawing tools
+        return button;
     }
 
     private Node buildMultiSelectButton() {

@@ -1,12 +1,17 @@
 package io.github.avery07.ui;
 
+import io.github.avery07.model.symbol.PlacementPattern;
 import javafx.scene.Group;
 import javafx.scene.Node;
+import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Polygon;
 import javafx.scene.shape.Polyline;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.SVGPath;
+import javafx.scene.shape.Shape;
+import javafx.scene.shape.StrokeLineCap;
+import javafx.scene.shape.StrokeLineJoin;
 
 /**
  * Small vector icons for the toolbar tools, drawn as JavaFX shapes and coloured via the
@@ -73,5 +78,64 @@ public final class Icons {
         shape.setScaleY(SCALE);
         // Wrap so the (scaled) size is reflected in layout bounds, sizing the button correctly.
         return new Group(shape);
+    }
+
+    // ----- symbol-type icons (coloured by the type, one per placement pattern) -----
+
+    /** A toolbar icon for a symbol type, drawn from its placement pattern and tinted its colour. */
+    public static Node symbol(PlacementPattern pattern, String color) {
+        Color c = Color.web(color);
+        return switch (pattern) {
+            case MARKER -> markerIcon(c);
+            case REGION -> regionIcon(c);
+            case PARAMETRIC -> coneIcon(c);
+            case PATH -> routeIcon(c);
+        };
+    }
+
+    /** A map pin (point of interest). */
+    private static Node markerIcon(Color c) {
+        SVGPath pin = new SVGPath();
+        pin.setContent("M8,2 C5.2,2 3,4.2 3,7 C3,10.5 8,14 8,14 C8,14 13,10.5 13,7 C13,4.2 10.8,2 8,2 Z");
+        pin.setFill(c);
+        Circle hole = new Circle(8, 6.6, 1.9);
+        hole.setFill(Color.WHITE);
+        return scaled(new Group(pin, hole));
+    }
+
+    /** A filled region (zone/area). */
+    private static Node regionIcon(Color c) {
+        Polygon poly = new Polygon(3, 4, 13, 3, 14, 12, 4, 13);
+        return scaled(stroked(poly, c, true));
+    }
+
+    /** A vision wedge (sight cone). */
+    private static Node coneIcon(Color c) {
+        SVGPath cone = new SVGPath();
+        cone.setContent("M4,13 L13.5,4 A 10,10 0 0 1 13.5,13 Z");
+        return scaled(stroked(cone, c, true));
+    }
+
+    /** A waypoint path (route). */
+    private static Node routeIcon(Color c) {
+        Polyline line = new Polyline(2, 13, 6, 4, 10, 11, 14, 3);
+        return scaled(stroked(line, c, false));
+    }
+
+    /** Colour a shape's stroke (and optionally a translucent fill), with rounded joins. */
+    private static Shape stroked(Shape shape, Color c, boolean fill) {
+        shape.setStroke(c);
+        shape.setStrokeWidth(1.3);
+        shape.setStrokeLineJoin(StrokeLineJoin.ROUND);
+        shape.setStrokeLineCap(StrokeLineCap.ROUND);
+        shape.setFill(fill ? c.deriveColor(0, 1, 1, 0.18) : null);
+        return shape;
+    }
+
+    /** Scale and wrap like {@link #styled}, but without the grey {@code .tool-icon} tint. */
+    private static Node scaled(Node node) {
+        node.setScaleX(SCALE);
+        node.setScaleY(SCALE);
+        return new Group(node);
     }
 }
