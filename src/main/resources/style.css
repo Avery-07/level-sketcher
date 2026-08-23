@@ -85,6 +85,15 @@
     -fx-padding: 5 12 5 8;
 }
 
+.style-popup {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 10;
+    -fx-border-color: #e6e7eb;
+    -fx-border-radius: 10;
+    -fx-padding: 10;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.18), 14, 0, 0, 4);
+}
+
 .toolbar-caption {
     -fx-text-fill: #8a8d93;
     -fx-padding: 0 4 0 6;

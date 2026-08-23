@@ -46,6 +46,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
+import javafx.stage.Popup;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
@@ -85,8 +86,10 @@ public final class App extends Application {
     private ToggleButton objectSnapButton;
     private ToggleButton symbolButton;
     private SymbolType lastSymbol;      // last symbol placed, for the one-click "place symbols" button
-    private javafx.stage.Popup symbolFlyout;
+    private Popup symbolFlyout;
     private final PauseTransition flyoutHide = new PauseTransition(Duration.millis(180));
+    private Popup stylePopup;           // stroke/fill/width, shown next to the active shape tool
+    private Node styleFillControls;     // the fill row, hidden for tools without a fill (freehand)
 
     @Override
     public void start(Stage stage) {
@@ -153,7 +156,7 @@ public final class App extends Application {
 
     private VBox buildToolPalette() {
         VBox palette = new VBox(10, buildModeSelector(), buildToolColumn(), buildSymbolButton(),
-                buildMultiSelectButton(), buildSnapButtons(), buildEditColumn(), grow(), buildStyleControls());
+                buildMultiSelectButton(), buildSnapButtons(), buildEditColumn(), grow());
         palette.getStyleClass().add("tool-palette");
         palette.setPadding(new Insets(6));
         palette.setAlignment(Pos.TOP_CENTER);
@@ -250,6 +253,7 @@ public final class App extends Application {
         lastSymbol = type;
         updateSymbolButtonGraphic();
         turnOffMultiSelect();
+        hideStylePopup(); // symbols carry their own colour, not the current shape style
         symbolButton.setSelected(true);
         canvas.useSymbolTool(type);
     }
@@ -289,7 +293,7 @@ public final class App extends Application {
         }
         menu.setOnMouseEntered(e -> flyoutHide.stop());
         menu.setOnMouseExited(e -> flyoutHide.playFromStart());
-        symbolFlyout = new javafx.stage.Popup();
+        symbolFlyout = new Popup();
         symbolFlyout.setAutoHide(true);
         symbolFlyout.getContent().add(menu);
     }
@@ -305,6 +309,7 @@ public final class App extends Application {
             if (on) {
                 toolGroup.selectToggle(null);
                 canvas.clearTool();
+                hideStylePopup();
             }
             canvas.setMultiSelect(on);
         });
@@ -352,22 +357,19 @@ public final class App extends Application {
         return column;
     }
 
-    /** The "current draw style" controls: what newly drawn shapes inherit. */
-    private Node buildStyleControls() {
+    /** Build the contextual style popup (stroke / fill / width) shown next to the active shape tool. */
+    private void buildStylePopup() {
         Style style = document.currentStyle();
         ColorPicker stroke = new ColorPicker(Color.web(style.stroke()));
         stroke.setMaxWidth(Double.MAX_VALUE);
-        stroke.setMinWidth(0);
         CheckBox fillOn = new CheckBox("Fill");
         fillOn.setSelected(style.fill() != null);
         ColorPicker fill = new ColorPicker(style.fill() != null ? Color.web(style.fill()) : Color.web("#cfe0ff"));
         fill.setMaxWidth(Double.MAX_VALUE);
-        fill.setMinWidth(0);
         Spinner<Double> width = new Spinner<>();
         width.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(0.5, 20, style.strokeWidth(), 0.5));
         width.setEditable(true);
         width.setMaxWidth(Double.MAX_VALUE);
-        width.setMinWidth(0);
 
         Runnable apply = () -> document.setCurrentStyle(new Style(
                 Colors.toHex(stroke.getValue()),
@@ -378,11 +380,44 @@ public final class App extends Application {
         fillOn.setOnAction(e -> apply.run());
         width.valueProperty().addListener((o, ov, nv) -> apply.run());
 
-        Label caption = new Label("New shape");
+        VBox fillBox = new VBox(4, fillOn, fill);
+        styleFillControls = fillBox;
+
+        Label caption = new Label("Style");
         caption.getStyleClass().add("toolbar-caption");
-        VBox column = new VBox(4, caption, new Label("Stroke"), stroke, fillOn, fill, new Label("Width"), width);
-        column.setAlignment(Pos.CENTER);
-        return column;
+        VBox content = new VBox(6, caption, new Label("Stroke"), stroke, fillBox, new Label("Width"), width);
+        content.getStyleClass().add("style-popup");
+        content.setPrefWidth(150);
+
+        stylePopup = new Popup();
+        stylePopup.getContent().add(content); // no auto-hide: it stays while the shape tool is active
+    }
+
+    /** Show the style popup beside a shape tool (hiding the fill row for tools without a fill). */
+    private void showStyleFor(Action action, ToggleButton anchor) {
+        boolean withFill;
+        switch (action) {
+            case RECTANGLE, CIRCLE, POLYGON -> withFill = true;
+            case FREEHAND -> withFill = false;
+            default -> {
+                hideStylePopup(); // text, erase, etc. don't use the current shape style
+                return;
+            }
+        }
+        if (stylePopup == null) {
+            buildStylePopup();
+        }
+        styleFillControls.setVisible(withFill);
+        styleFillControls.setManaged(withFill);
+        stylePopup.hide();
+        var b = anchor.localToScreen(anchor.getLayoutBounds());
+        stylePopup.show(anchor, b.getMaxX() + 6, b.getMinY());
+    }
+
+    private void hideStylePopup() {
+        if (stylePopup != null) {
+            stylePopup.hide();
+        }
     }
 
     private ToggleButton toolButton(Node icon, Action action, Runnable activate) {
@@ -394,8 +429,10 @@ public final class App extends Application {
             if (button.isSelected()) {
                 turnOffMultiSelect();
                 activate.run();
+                showStyleFor(action, button);
             } else {
                 canvas.clearTool();
+                hideStylePopup();
             }
         });
         actionButtons.put(action, button);
@@ -426,6 +463,7 @@ public final class App extends Application {
             toolGroup.selectToggle(null);
             canvas.clearTool();
         }
+        hideStylePopup(); // no shape tool remains active across a mode switch
         document.setEditorMode(mode);
         syncModeUi();
     }
@@ -470,13 +508,17 @@ public final class App extends Application {
             case SELECT -> {
                 toolGroup.selectToggle(null);
                 canvas.clearTool();
+                hideStylePopup();
             }
             default -> { // a drawing tool
                 ToggleButton button = actionButtons.get(action);
-                if (button != null && !button.isSelected()) {
-                    turnOffMultiSelect();
-                    button.setSelected(true);
-                    actionRunnables.get(action).run();
+                if (button != null) {
+                    if (!button.isSelected()) {
+                        turnOffMultiSelect();
+                        button.setSelected(true);
+                        actionRunnables.get(action).run();
+                    }
+                    showStyleFor(action, button);
                 }
             }
         }
