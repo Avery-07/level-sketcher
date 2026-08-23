@@ -55,8 +55,9 @@ public final class WorkspaceRenderer {
     private static final Color GRID_COLOR = Color.web("#e6e7ea");
     private static final Color LABEL_COLOR = Color.web("#6b7280");
     private static final Color BORDER = Color.web("#c2c6cd");
-    private static final Color TAB_FILL = Color.web("#eceef1");    // inactive layer tab
-    private static final Color TAB_ACTIVE = Color.web("#9199a3");  // active layer tab
+    private static final Color TAB_FILL = Color.web("#eceef1");         // inactive layer tab
+    private static final Color TAB_LABEL_ACTIVE = Color.web("#33353a"); // number on the active tab
+    private static final Color TAB_LABEL_INACTIVE = Color.web("#9aa0a8");
     private static final Color SHADOW = Color.rgb(20, 22, 28, 0.05);
     private static final Color SELECTION = Color.web("#3b82f6");
     private static final Color HANDLE_FILL = Color.WHITE;
@@ -172,23 +173,39 @@ public final class WorkspaceRenderer {
         g.strokePolygon(xs, ys, 4);
     }
 
-    /** Numbered tabs next to the name; the filled one is the active (shown) layer. */
+    /**
+     * Browser-style numbered tabs next to the name: rounded top, open bottom. The active tab is
+     * filled the sheet colour with no bottom edge, so it connects into the sheet below it; inactive
+     * tabs are greyed and closed.
+     */
     private void drawLayerTabs(GraphicsContext g, Sheet s) {
         Layer active = s.activeLayer();
         java.util.List<Layer> layers = s.layers();
         g.setFont(LABEL_FONT);
         g.setTextAlign(javafx.scene.text.TextAlignment.CENTER);
         g.setTextBaseline(javafx.geometry.VPos.CENTER);
+        g.setLineWidth(1);
+        double rad = 6;
         for (LayerTabs.Tab t : LayerTabs.tabs(s, viewport)) {
             Rect r = t.screen();
             boolean isActive = layers.get(t.index()) == active;
-            g.setFill(isActive ? TAB_ACTIVE : TAB_FILL);
-            g.fillRoundRect(r.minX(), r.minY(), r.width(), r.height(), 5, 5);
+            double x = r.minX(), top = r.minY(), right = r.maxX(), bottom = r.maxY();
+            g.beginPath();
+            g.moveTo(x, bottom);
+            g.lineTo(x, top + rad);
+            g.quadraticCurveTo(x, top, x + rad, top);
+            g.lineTo(right - rad, top);
+            g.quadraticCurveTo(right, top, right, top + rad);
+            g.lineTo(right, bottom);
+            if (!isActive) {
+                g.lineTo(x, bottom); // close the bottom so inactive tabs read as separate
+            }
+            g.setFill(isActive ? SHEET_FILL : TAB_FILL);
+            g.fill();
             g.setStroke(BORDER);
-            g.setLineWidth(1);
-            g.strokeRoundRect(r.minX(), r.minY(), r.width(), r.height(), 5, 5);
-            g.setFill(isActive ? Color.WHITE : LABEL_COLOR);
-            g.fillText(String.valueOf(t.index() + 1), (r.minX() + r.maxX()) / 2, (r.minY() + r.maxY()) / 2 + 1);
+            g.stroke(); // strokes the path as drawn — the active tab's bottom stays open
+            g.setFill(isActive ? TAB_LABEL_ACTIVE : TAB_LABEL_INACTIVE);
+            g.fillText(String.valueOf(t.index() + 1), (x + right) / 2, (top + bottom) / 2 + 1);
         }
         g.setTextAlign(javafx.scene.text.TextAlignment.LEFT); // restore for the next sheet's name
         g.setTextBaseline(javafx.geometry.VPos.BASELINE);
