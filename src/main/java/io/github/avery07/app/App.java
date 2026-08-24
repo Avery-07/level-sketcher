@@ -417,6 +417,9 @@ public final class App extends Application {
         stylePopup.hide();
         var b = anchor.localToScreen(anchor.getLayoutBounds());
         stylePopup.show(anchor, b.getMaxX() + 6, b.getMinY());
+        // Keep keyboard focus on the canvas: otherwise the width field grabs it and swallows
+        // shortcuts like Delete. The controls still take focus when the user clicks them.
+        javafx.application.Platform.runLater(canvas::requestFocus);
     }
 
     private void hideStylePopup() {
