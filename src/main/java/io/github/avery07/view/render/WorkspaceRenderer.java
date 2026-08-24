@@ -75,8 +75,14 @@ public final class WorkspaceRenderer {
         g.setTransform(1, 0, 0, 1, 0, 0);
         g.setFill(BG);
         g.fillRect(0, 0, w, h);
-        for (Sheet s : document.workspace().sheets()) {
-            drawSheet(g, s);
+        // Two passes so drawings always sit above every sheet: all backgrounds (frame, grid,
+        // label, border) first, then every sheet's elements on top of all of them.
+        var sheets = document.workspace().sheets();
+        for (Sheet s : sheets) {
+            drawSheetBackground(g, s);
+        }
+        for (Sheet s : sheets) {
+            drawSheetElements(g, s);
         }
     }
 
@@ -141,7 +147,8 @@ public final class WorkspaceRenderer {
         g.strokeOval(rot.x() - rr, rot.y() - rr, SheetHandles.SIZE, SheetHandles.SIZE);
     }
 
-    private void drawSheet(GraphicsContext g, Sheet s) {
+    /** A sheet's background chrome: shadow, fill, grid, name label, and frame border. */
+    private void drawSheetBackground(GraphicsContext g, Sheet s) {
         Vec2 tl = screen(s, s.left(), s.top());
         Vec2 tr = screen(s, s.right(), s.top());
         Vec2 br = screen(s, s.right(), s.bottom());
@@ -155,14 +162,6 @@ public final class WorkspaceRenderer {
 
         drawGrid(g, s);
 
-        // Only the active layer is drawn: layers are pages you switch between, not stacked overlays.
-        Layer active = s.activeLayer();
-        if (active != null) {
-            for (Element e : active.elements()) {
-                drawElement(g, s, e);
-            }
-        }
-
         // Label in screen space at a fixed size, so it never distorts with the sheet.
         g.setFill(LABEL_COLOR);
         g.setFont(LABEL_FONT);
@@ -171,6 +170,17 @@ public final class WorkspaceRenderer {
         g.setStroke(BORDER);
         g.setLineWidth(1);
         g.strokePolygon(xs, ys, 4);
+    }
+
+    /** A sheet's drawings (its active layer's elements), rendered above every sheet background. */
+    private void drawSheetElements(GraphicsContext g, Sheet s) {
+        // Only the active layer is drawn: layers are pages you switch between, not stacked overlays.
+        Layer active = s.activeLayer();
+        if (active != null) {
+            for (Element e : active.elements()) {
+                drawElement(g, s, e);
+            }
+        }
     }
 
     /**
