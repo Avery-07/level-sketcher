@@ -1,8 +1,8 @@
 # LevelSketcher
 
-A desktop sketching tool for game‑level design. Draw shapes and freehand lines, place typed
-symbols (POI, zones, sight cones, routes), and organize your work across movable sheets and
-layers.
+LevelSketcher is a lightweight 2D level design tool for quickly sketching and organizing game environments. It supports freehand drawing, shapes, annotations, symbols, and multiple movable sheets. This is quite hard to fully describe, so I suggest you try it to get a rough idea!
+
+The goal is to make it easy to experiment with level layouts before moving on to a full game engine or 3D editor.
 
 Built with JavaFX on Java 21.
 
