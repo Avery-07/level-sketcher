@@ -1,8 +1,8 @@
 # LevelSketcher
 
 A desktop sketching tool for game‑level design. Draw shapes and freehand lines, place typed
-symbols (POI, zones, sight cones, routes), and organize your work across movable **sheets** and
-**layers** — with grid and object snapping to keep things tidy.
+symbols (POI, zones, sight cones, routes), and organize your work across movable sheets and
+layers.
 
 Built with JavaFX on Java 21.
 
