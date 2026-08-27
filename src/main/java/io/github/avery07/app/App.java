@@ -309,9 +309,9 @@ public final class App extends Application {
     }
 
     private Node buildMultiSelectButton() {
-        multiSelectButton = new ToggleButton("Multi-select");
-        multiSelectButton.setMaxWidth(Double.MAX_VALUE);
-        multiSelectButton.setMinWidth(0);
+        multiSelectButton = new ToggleButton();
+        multiSelectButton.setGraphic(Icons.multiSelect());
+        multiSelectButton.setPrefWidth(TOOL_BUTTON_WIDTH);
         multiSelectButton.setTooltip(new Tooltip(
                 "Select multiple — drag a box to add, drag a selected item to move, right-click to clear"));
         multiSelectButton.setOnAction(e -> {
@@ -327,14 +327,14 @@ public final class App extends Application {
     }
 
     private Node buildSnapButtons() {
-        gridSnapButton = new ToggleButton("Grid snap");
-        gridSnapButton.setMaxWidth(Double.MAX_VALUE);
-        gridSnapButton.setMinWidth(0);
+        gridSnapButton = new ToggleButton();
+        gridSnapButton.setGraphic(Icons.gridSnap());
+        gridSnapButton.setPrefWidth(TOOL_BUTTON_WIDTH);
         gridSnapButton.setOnAction(e -> canvas.setGridSnap(gridSnapButton.isSelected()));
 
-        objectSnapButton = new ToggleButton("Object snap");
-        objectSnapButton.setMaxWidth(Double.MAX_VALUE);
-        objectSnapButton.setMinWidth(0);
+        objectSnapButton = new ToggleButton();
+        objectSnapButton.setGraphic(Icons.objectSnap());
+        objectSnapButton.setPrefWidth(TOOL_BUTTON_WIDTH);
         objectSnapButton.setOnAction(e -> canvas.setObjectSnap(objectSnapButton.isSelected()));
 
         VBox column = new VBox(4, gridSnapButton, objectSnapButton);

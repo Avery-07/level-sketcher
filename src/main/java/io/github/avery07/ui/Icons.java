@@ -72,6 +72,31 @@ public final class Icons {
         return styled(p);
     }
 
+    public static Node multiSelect() {
+        // A dashed marquee box, suggesting a drag-selection of several objects.
+        Rectangle r = new Rectangle(1.5, 1.5, 13, 13);
+        r.setArcWidth(2);
+        r.setArcHeight(2);
+        r.getStrokeDashArray().addAll(2.5, 2.5);
+        return styled(r);
+    }
+
+    public static Node gridSnap() {
+        // A 3×3 grid of lines.
+        SVGPath p = new SVGPath();
+        p.setContent("M1,6 H15 M1,11 H15 M6,1 V15 M11,1 V15");
+        return styled(p);
+    }
+
+    public static Node objectSnap() {
+        // A shape with snap grips at its corners, suggesting snapping to an object's geometry.
+        SVGPath p = new SVGPath();
+        p.setContent("M4,4 H12 V12 H4 Z "
+                + "M2,2 H5 V5 H2 Z M11,2 H14 V5 H11 Z "
+                + "M11,11 H14 V14 H11 Z M2,11 H5 V14 H2 Z");
+        return styled(p);
+    }
+
     private static Node styled(Node shape) {
         shape.getStyleClass().add("tool-icon");
         shape.setScaleX(SCALE);
