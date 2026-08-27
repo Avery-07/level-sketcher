@@ -399,8 +399,10 @@ public final class App extends Application {
         content.getStyleClass().add("style-popup");
         content.setPrefWidth(150);
 
-        stylePopup = new Popup();
-        stylePopup.getContent().add(content); // no auto-hide: it stays while the shape tool is active
+        if (stylePopup == null) {
+            stylePopup = new Popup(); // no auto-hide: it stays while the shape tool is active
+        }
+        stylePopup.getContent().setAll(content);
     }
 
     /** Show the style popup beside a shape tool (hiding the fill row for tools without a fill). */
@@ -414,9 +416,9 @@ public final class App extends Application {
                 return;
             }
         }
-        if (stylePopup == null) {
-            buildStylePopup();
-        }
+        // Rebuild the popup from scratch on every activation: fresh controls carry no
+        // uncommitted text and, crucially, no keyboard focus lingering on a text field.
+        buildStylePopup();
         styleFillControls.setVisible(withFill);
         styleFillControls.setManaged(withFill);
         stylePopup.hide();
