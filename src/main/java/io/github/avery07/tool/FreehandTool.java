@@ -61,7 +61,9 @@ public final class FreehandTool implements Tool {
             FreehandStroke stroke = new FreehandStroke(localPoints);
             stroke.setStyle(ctx.currentStyle());
             ctx.execute(new AddElementCommand(sheet, stroke));
-            ctx.document().selectElement(sheet, stroke);
+            // A freehand stroke stays unselected after drawing, so you can keep sketching
+            // without its handles getting in the way (unlike the other shape tools).
+            ctx.document().clearSelection();
         }
         localPoints.clear();
         sheet = null;
