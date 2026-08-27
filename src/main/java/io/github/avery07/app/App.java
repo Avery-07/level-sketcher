@@ -111,6 +111,11 @@ public final class App extends Application {
         bindings.addListener(this::refreshShortcutHints);
         refreshShortcutHints();
 
+        // Any tool change hands keyboard focus back to the canvas, so the style popup's fields
+        // never keep focus across a switch and shortcuts like Delete keep working.
+        toolGroup.selectedToggleProperty().addListener((o, ov, nv) ->
+                javafx.application.Platform.runLater(canvas::requestFocus));
+
         document.addChangeListener(this::syncModeUi);
         syncModeUi();
 
