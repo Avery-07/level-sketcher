@@ -19,15 +19,15 @@ public final class KeyBindings {
     /** A rebindable action. {@code editionOnly} actions fire only while editing sheet content. */
     public enum Action {
         TOGGLE_MODE("Switch Assembly / Edition", KeyCode.TAB, false),
-        SELECT("Select (no tool)", KeyCode.V, true),
+        SELECT("Select (no tool)", KeyCode.S, true),
         RECTANGLE("Rectangle tool", KeyCode.R, true),
-        CIRCLE("Circle tool", KeyCode.O, true),
+        CIRCLE("Circle tool", KeyCode.C, true),
         POLYGON("Polygon tool", KeyCode.P, true),
         FREEHAND("Freehand tool", KeyCode.D, true),
         TEXT("Text tool", KeyCode.T, true),
         ERASE("Erase tool", KeyCode.E, true),
         GRID_SNAP("Grid snap", KeyCode.G, false),
-        OBJECT_SNAP("Object snap", KeyCode.A, false);
+        OBJECT_SNAP("Object snap", KeyCode.O, false);
 
         private final String label;
         private final KeyCode defaultKey;

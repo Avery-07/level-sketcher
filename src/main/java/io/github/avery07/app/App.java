@@ -528,12 +528,17 @@ public final class App extends Application {
             default -> { // a drawing tool
                 ToggleButton button = actionButtons.get(action);
                 if (button != null) {
-                    if (!button.isSelected()) {
+                    if (button.isSelected()) {
+                        // Pressing the active tool's key again turns the tool off.
+                        toolGroup.selectToggle(null);
+                        canvas.clearTool();
+                        hideStylePopup();
+                    } else {
                         turnOffMultiSelect();
                         button.setSelected(true);
                         actionRunnables.get(action).run();
+                        showStyleFor(action, button);
                     }
-                    showStyleFor(action, button);
                 }
             }
         }
