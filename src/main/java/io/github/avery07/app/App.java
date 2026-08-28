@@ -140,16 +140,16 @@ public final class App extends Application {
         file.getItems().addAll(open, save, saveAs, new SeparatorMenuItem(),
                 importImg, new SeparatorMenuItem(), exportPng, exportSvg, exportJson);
 
-        Menu systems = new Menu("Systems");
-        systems.getItems().add(menuItem("Manage Symbols…", null,
-                () -> SymbolsDialog.show(stage, document.symbolLibrary(), this::refreshSymbols)));
-
         Menu settings = new Menu("Settings");
-        MenuItem shortcuts = menuItem("Keyboard Shortcuts…", null,
-                () -> ShortcutsDialog.show(stage, bindings));
-        settings.getItems().add(shortcuts);
+        settings.getItems().addAll(
+                menuItem("Manage Symbols…", null,
+                        () -> SymbolsDialog.show(stage, document.symbolLibrary(), this::refreshSymbols)),
+                new SeparatorMenuItem(),
+                menuItem("Keyboard Shortcuts…", null,
+                        () -> ShortcutsDialog.show(stage, bindings))
+        );
 
-        return new MenuBar(file, systems, settings);
+        return new MenuBar(file, settings);
     }
 
     private VBox buildToolPalette() {
