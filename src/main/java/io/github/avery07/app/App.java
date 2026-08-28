@@ -11,6 +11,7 @@ import io.github.avery07.ui.Colors;
 import io.github.avery07.ui.Icons;
 import io.github.avery07.ui.ShortcutsDialog;
 import io.github.avery07.ui.SymbolsDialog;
+import io.github.avery07.ui.Theme;
 import javafx.animation.PauseTransition;
 import io.github.avery07.view.CanvasView;
 import javafx.application.Application;
@@ -18,12 +19,14 @@ import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBase;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContentDisplay;
@@ -59,6 +62,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.prefs.Preferences;
 
 /**
  * The JavaFX application shell: a top menu bar, a left tool palette (mode button, sheet actions
@@ -71,9 +75,15 @@ public final class App extends Application {
     private static final double TOOL_BUTTON_WIDTH = 48; // compact, uniform icon buttons
     private static final double TOOLBAR_WIDTH = 116;     // narrow, fixed palette width
 
+    /** Lighter default stroke for new shapes in dark mode, so drawings show up on dark paper. */
+    private static final Style DARK_STROKE_DEFAULT = new Style("#e6e6e6", null, 2.0);
+
     private final Document document = new Document();
     private final ToggleGroup toolGroup = new ToggleGroup();
     private final KeyBindings bindings = new KeyBindings();
+    private final Preferences prefs = Preferences.userRoot().node("io/github/avery07/levelsketcher/prefs");
+    private Theme theme = Theme.LIGHT;
+    private CheckMenuItem darkModeItem;
     private final Map<Action, ToggleButton> actionButtons = new EnumMap<>(Action.class);
     private final Map<Action, Runnable> actionRunnables = new EnumMap<>(Action.class);
     private final List<ButtonBase> drawButtons = new ArrayList<>();
@@ -120,6 +130,7 @@ public final class App extends Application {
         syncModeUi();
 
         stage.setScene(scene);
+        applyTheme(loadTheme()); // restore the saved light/dark preference (scene now attached)
         stage.setTitle(titleFor(document));
         document.addChangeListener(() -> stage.setTitle(titleFor(document)));
         stage.setOnCloseRequest(this::confirmClose);
@@ -140,11 +151,16 @@ public final class App extends Application {
         file.getItems().addAll(open, save, saveAs, new SeparatorMenuItem(),
                 importImg, new SeparatorMenuItem(), exportPng, exportSvg, exportJson);
 
+        darkModeItem = new CheckMenuItem("Dark Mode");
+        darkModeItem.setSelected(theme == Theme.DARK);
+        darkModeItem.setOnAction(e -> applyTheme(darkModeItem.isSelected() ? Theme.DARK : Theme.LIGHT));
+
         Menu settings = new Menu("Settings");
         settings.getItems().addAll(
                 menuItem("Manage Symbols…", null,
                         () -> SymbolsDialog.show(stage, document.symbolLibrary(), this::refreshSymbols)),
                 new SeparatorMenuItem(),
+                darkModeItem,
                 menuItem("Keyboard Shortcuts…", null,
                         () -> ShortcutsDialog.show(stage, bindings))
         );
@@ -288,6 +304,7 @@ public final class App extends Application {
     private void buildSymbolFlyout() {
         VBox menu = new VBox(2);
         menu.getStyleClass().add("symbol-flyout");
+        themePopupContent(menu);
         for (SymbolType type : document.symbolLibrary().types()) {
             Button item = new Button(type.name());
             item.setGraphic(Icons.symbol(type.pattern(), type.color()));
@@ -398,6 +415,7 @@ public final class App extends Application {
         VBox content = new VBox(6, caption, new Label("Stroke"), stroke, fillBox, new Label("Width"), width);
         content.getStyleClass().add("style-popup");
         content.setPrefWidth(150);
+        themePopupContent(content);
 
         if (stylePopup == null) {
             stylePopup = new Popup(); // no auto-hide: it stays while the shape tool is active
@@ -433,6 +451,55 @@ public final class App extends Application {
         if (stylePopup != null) {
             stylePopup.hide();
         }
+    }
+
+    // ----- theming -----
+
+    private Theme loadTheme() {
+        try {
+            return Theme.valueOf(prefs.get("theme", Theme.LIGHT.name()));
+        } catch (RuntimeException ex) {
+            return Theme.LIGHT; // unknown/unavailable preference — fall back to light
+        }
+    }
+
+    /** Switch the whole app (chrome + canvas) to a theme and remember the choice. */
+    private void applyTheme(Theme newTheme) {
+        // Flip the default new-shape stroke with the theme, but never clobber a colour the user chose.
+        if (document.currentStyle().equals(defaultStyleFor(theme))) {
+            document.setCurrentStyle(defaultStyleFor(newTheme));
+        }
+        theme = newTheme;
+
+        Parent root = stage.getScene().getRoot();
+        root.getStyleClass().removeAll(Theme.LIGHT.styleClass(), Theme.DARK.styleClass());
+        root.getStyleClass().add(theme.styleClass());
+        canvas.setTheme(theme);
+        if (darkModeItem != null) {
+            darkModeItem.setSelected(theme == Theme.DARK);
+        }
+
+        // Drop the cached popups so they rebuild with the new theme class the next time they show.
+        hideStylePopup();
+        if (symbolFlyout != null) {
+            symbolFlyout.hide();
+            symbolFlyout = null;
+        }
+        prefs.put("theme", theme.name());
+    }
+
+    private static Style defaultStyleFor(Theme theme) {
+        return theme == Theme.DARK ? DARK_STROKE_DEFAULT : Style.DEFAULT;
+    }
+
+    /** Give a popup's content root the stylesheet and current theme class so its CSS resolves
+     *  (popups are separate windows and don't inherit the main scene's stylesheet). */
+    private void themePopupContent(Parent content) {
+        var css = App.class.getResource("/style.css");
+        if (css != null && !content.getStylesheets().contains(css.toExternalForm())) {
+            content.getStylesheets().add(css.toExternalForm());
+        }
+        content.getStyleClass().add(theme.styleClass());
     }
 
     private ToggleButton toolButton(Node icon, Action action, Runnable activate) {

@@ -15,6 +15,7 @@ import io.github.avery07.model.element.ImageElement;
 import io.github.avery07.model.element.SymbolInstance;
 import io.github.avery07.model.element.TextElement;
 import io.github.avery07.model.symbol.PlacementPattern;
+import io.github.avery07.ui.Theme;
 import io.github.avery07.view.ElementHandles;
 import io.github.avery07.view.LayerTabs;
 import io.github.avery07.view.SheetGeometry;
@@ -50,30 +51,35 @@ public final class WorkspaceRenderer {
     private static final int MAX_GRID_LINES = 400; // per axis, perf guard
     private static final int CIRCLE_SEGMENTS = 64; // polygon approximation for circles
 
-    private static final Color BG = Color.web("#ebecef");
-    private static final Color SHEET_FILL = Color.web("#ffffff");
-    private static final Color GRID_COLOR = Color.web("#e6e7ea");
-    private static final Color LABEL_COLOR = Color.web("#6b7280");
-    private static final Color BORDER = Color.web("#c2c6cd");
-    private static final Color TAB_FILL = Color.web("#eceef1");         // inactive layer tab
-    private static final Color TAB_LABEL_ACTIVE = Color.web("#33353a"); // number on the active tab
-    private static final Color TAB_LABEL_INACTIVE = Color.web("#9aa0a8");
-    private static final Color SHADOW = Color.rgb(20, 22, 28, 0.05);
-    private static final Color SELECTION = Color.web("#3b82f6");
+    private static final Color SELECTION = Color.web("#3b82f6"); // reads on both themes
     private static final Color HANDLE_FILL = Color.WHITE;
 
     private final Document document;
     private final Viewport viewport;
     private final Map<ImageElement, Image> imageCache = new IdentityHashMap<>();
+    private Theme theme = Theme.LIGHT; // the canvas palette in use
 
     public WorkspaceRenderer(Document document, Viewport viewport) {
         this.document = document;
         this.viewport = viewport;
     }
 
+    public void setTheme(Theme theme) {
+        this.theme = theme;
+    }
+
+    private Theme.Palette p() {
+        return theme.palette();
+    }
+
+    /** The fill of a sheet's paper. Centralised so a future per-sheet colour can override the theme. */
+    private Color sheetFill(Sheet s) {
+        return p().sheetFill();
+    }
+
     public void renderContent(GraphicsContext g, double w, double h) {
         g.setTransform(1, 0, 0, 1, 0, 0);
-        g.setFill(BG);
+        g.setFill(p().background());
         g.fillRect(0, 0, w, h);
         // Two passes so drawings always sit above every sheet: all backgrounds (frame, grid,
         // label, border) first, then every sheet's elements on top of all of them.
@@ -157,17 +163,17 @@ public final class WorkspaceRenderer {
         double[] ys = {tl.y(), tr.y(), br.y(), bl.y()};
 
         drawShadow(g, xs, ys);
-        g.setFill(SHEET_FILL);
+        g.setFill(sheetFill(s));
         g.fillPolygon(xs, ys, 4);
 
         drawGrid(g, s);
 
         // Label in screen space at a fixed size, so it never distorts with the sheet.
-        g.setFill(LABEL_COLOR);
+        g.setFill(p().label());
         g.setFont(LABEL_FONT);
         g.fillText(s.name(), tl.x() + LABEL_DX, tl.y() + LABEL_DY);
 
-        g.setStroke(BORDER);
+        g.setStroke(p().border());
         g.setLineWidth(1);
         g.strokePolygon(xs, ys, 4);
     }
@@ -210,11 +216,11 @@ public final class WorkspaceRenderer {
             if (!isActive) {
                 g.lineTo(x, bottom); // close the bottom so inactive tabs read as separate
             }
-            g.setFill(isActive ? SHEET_FILL : TAB_FILL);
+            g.setFill(isActive ? sheetFill(s) : p().tabFill());
             g.fill();
-            g.setStroke(BORDER);
+            g.setStroke(p().border());
             g.stroke(); // strokes the path as drawn — the active tab's bottom stays open
-            g.setFill(isActive ? TAB_LABEL_ACTIVE : TAB_LABEL_INACTIVE);
+            g.setFill(isActive ? p().tabLabelActive() : p().tabLabelInactive());
             g.fillText(String.valueOf(t.index() + 1), (x + right) / 2, (top + bottom) / 2 + 1);
         }
         g.setTextAlign(javafx.scene.text.TextAlignment.LEFT); // restore for the next sheet's name
@@ -223,7 +229,7 @@ public final class WorkspaceRenderer {
 
     /** A soft drop shadow behind the sheet (a few offset translucent copies). */
     private void drawShadow(GraphicsContext g, double[] xs, double[] ys) {
-        g.setFill(SHADOW);
+        g.setFill(p().shadow());
         for (int p = 0; p < 3; p++) {
             double off = 2 + p * 2;
             double[] sx = {xs[0] + off, xs[1] + off, xs[2] + off, xs[3] + off};
@@ -259,7 +265,7 @@ public final class WorkspaceRenderer {
         if (kMax - kMin > MAX_GRID_LINES || mMax - mMin > MAX_GRID_LINES) {
             return;
         }
-        g.setStroke(GRID_COLOR);
+        g.setStroke(p().grid());
         g.setLineWidth(1);
         for (int k = kMin; k <= kMax; k++) {
             Vec2 base = origin.add(ax.scale(k * cell));

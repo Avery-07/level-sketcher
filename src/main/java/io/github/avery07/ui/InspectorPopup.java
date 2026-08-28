@@ -19,7 +19,6 @@ import io.github.avery07.model.element.TextElement;
 import io.github.avery07.model.symbol.ParameterDef;
 
 import java.util.Map;
-import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
@@ -28,7 +27,6 @@ import javafx.scene.control.Separator;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
-import javafx.scene.effect.DropShadow;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.VBox;
@@ -50,12 +48,8 @@ public final class InspectorPopup {
     public InspectorPopup(Document document) {
         this.document = document;
         this.layers = new LayersPanel(document, true);
-        content.setPadding(new Insets(10));
         content.setMinWidth(190);
-        content.setStyle("-fx-background-color: white;"
-                + "-fx-border-color: #8a8a8a; -fx-border-width: 1;"
-                + "-fx-background-radius: 5; -fx-border-radius: 5;");
-        content.setEffect(new DropShadow(8, Color.rgb(0, 0, 0, 0.35)));
+        content.getStyleClass().addAll("inspector-popup", Theme.LIGHT.styleClass());
         var css = InspectorPopup.class.getResource("/style.css");
         if (css != null) {
             content.getStylesheets().add(css.toExternalForm());
@@ -68,6 +62,12 @@ public final class InspectorPopup {
         });
         popup.getContent().add(content);
         popup.setAutoHide(false); // dismissed explicitly, to play nicely with the colour pickers
+    }
+
+    /** Repaint the popup's chrome in the given theme (its CSS resolves from this class). */
+    public void setTheme(Theme theme) {
+        content.getStyleClass().removeAll(Theme.LIGHT.styleClass(), Theme.DARK.styleClass());
+        content.getStyleClass().add(theme.styleClass());
     }
 
     public boolean isShowing() {

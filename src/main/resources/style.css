@@ -1,23 +1,91 @@
-/* LevelSketcher — light, Figma/Miro-style chrome. */
+/* LevelSketcher — Figma/Miro-style chrome, themed light or dark.
+ *
+ * All colours are looked-up variables. They are defined on the scene root (so menus, combo
+ * popups and other JavaFX-owned popups resolve them scene-wide, the way modena's colours do)
+ * AND on the .theme-* classes (so our own separate Popup windows, which carry one of those
+ * classes, resolve them too). The scene root also carries the active .theme-* class, so the
+ * higher-specificity dark block wins there. To retheme, only the variable blocks below change. */
+
+.root, .theme-light {
+    -c-app-bg: #f7f8fa;      /* window background */
+    -c-surface: #ffffff;     /* menu bar, palette, panels, popups */
+    -c-border: #e6e7eb;
+    -c-text: #33353a;
+    -c-text-strong: #23252a;
+    -c-muted: #8a8d93;
+    -c-icon: #44474d;        /* tool-icon stroke */
+    -c-hover: #eef0f3;
+    -c-pressed: #e2e5ea;
+    -c-accent: #2f6fed;
+    -c-accent-soft: #e7f0ff; /* selected toggle / active row */
+    -c-field-bg: #ffffff;
+    -c-field-border: #d7d9de;
+}
+
+.root.theme-dark, .theme-dark {
+    -c-app-bg: #1a1b1e;
+    -c-surface: #232428;
+    -c-border: #34363c;
+    -c-text: #d4d6da;
+    -c-text-strong: #f0f1f3;
+    -c-muted: #8b8f96;
+    -c-icon: #b5bac1;
+    -c-hover: #2c2e33;
+    -c-pressed: #34363c;
+    -c-accent: #5b8cff;
+    -c-accent-soft: #2b3a5c;
+    -c-field-bg: #1a1b1e;
+    -c-field-border: #3a3d43;
+}
 
 .root {
     -fx-font-family: "Segoe UI", "Inter", "Helvetica Neue", sans-serif;
     -fx-font-size: 13px;
-    -fx-background-color: #f7f8fa;
-    -accent: #2f6fed;
+    -fx-background-color: -c-app-bg;
+    -accent: -c-accent;
 }
 
 /* Top menu bar */
 .menu-bar {
-    -fx-background-color: #ffffff;
-    -fx-border-color: #e6e7eb;
+    -fx-background-color: -c-surface;
+    -fx-border-color: -c-border;
     -fx-border-width: 0 0 1 0;
+}
+
+.menu-bar .label {
+    -fx-text-fill: -c-text;
+}
+
+/* Dropdown menus (File / Systems / Settings) */
+.context-menu {
+    -fx-background-color: -c-surface;
+    -fx-border-color: -c-border;
+    -fx-border-width: 1;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.22), 14, 0, 0, 4);
+}
+
+.menu-item .label {
+    -fx-text-fill: -c-text;
+}
+
+.menu-item:focused {
+    -fx-background-color: -c-accent-soft;
+}
+
+.menu-item:focused .label {
+    -fx-text-fill: -c-text-strong;
+}
+
+.check-menu-item:checked > .left-container > .check {
+    -fx-background-color: -c-accent;
 }
 
 /* Left tool palette */
 .tool-palette {
-    -fx-background-color: #ffffff;
-    -fx-border-color: #e6e7eb;
+    -fx-background-color: -c-surface;
+    -fx-border-color: -c-border;
     -fx-border-width: 0 1 0 0;
 }
 
@@ -25,122 +93,178 @@
 .toggle-button {
     -fx-background-color: transparent;
     -fx-background-radius: 8;
-    -fx-text-fill: #33353a;
+    -fx-text-fill: -c-text;
     -fx-padding: 6 10 6 10;
     -fx-cursor: hand;
 }
 
 .button:hover,
 .toggle-button:hover {
-    -fx-background-color: #eef0f3;
+    -fx-background-color: -c-hover;
 }
 
 .button:pressed {
-    -fx-background-color: #e2e5ea;
+    -fx-background-color: -c-pressed;
 }
 
 .toggle-button:selected {
-    -fx-background-color: #e7f0ff;
-    -fx-text-fill: -accent;
+    -fx-background-color: -c-accent-soft;
+    -fx-text-fill: -c-accent;
 }
 
 .mode-selector {
-    -fx-background-color: #eef0f3;
+    -fx-background-color: -c-hover;
     -fx-background-radius: 8;
 }
 
 .mode-selector:hover {
-    -fx-background-color: #e2e5ea;
+    -fx-background-color: -c-pressed;
 }
 
 .mode-selector > .list-cell {
     -fx-background-color: transparent;
     -fx-font-weight: bold;
-    -fx-text-fill: #2f3136;
+    -fx-text-fill: -c-text-strong;
     -fx-padding: 6 8 6 8;
+}
+
+.mode-selector .arrow {
+    -fx-background-color: -c-icon;
+}
+
+/* Combo popups (the mode selector's list) */
+.combo-box-popup .list-view {
+    -fx-background-color: -c-surface;
+    -fx-border-color: -c-border;
+    -fx-border-width: 1;
+}
+
+.combo-box-popup .list-cell {
+    -fx-background-color: -c-surface;
+    -fx-text-fill: -c-text;
+    -fx-padding: 6 10 6 10;
+}
+
+.combo-box-popup .list-cell:filled:hover {
+    -fx-background-color: -c-accent-soft;
+    -fx-text-fill: -c-text-strong;
 }
 
 .tool-icon {
     -fx-fill: transparent;
-    -fx-stroke: #44474d;
+    -fx-stroke: -c-icon;
     -fx-stroke-width: 1.1; /* scaled ~1.6x by Icons.SCALE */
     -fx-stroke-line-join: round;
     -fx-stroke-line-cap: round;
 }
 
 .toggle-button:selected .tool-icon {
-    -fx-stroke: -accent;
+    -fx-stroke: -c-accent;
+}
+
+.symbol-flyout,
+.style-popup,
+.inspector-popup {
+    -fx-background-color: -c-surface;
+    -fx-background-radius: 10;
+    -fx-border-color: -c-border;
+    -fx-border-radius: 10;
+    -fx-padding: 10;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.28), 14, 0, 0, 4);
 }
 
 .symbol-flyout {
-    -fx-background-color: #ffffff;
-    -fx-background-radius: 10;
-    -fx-border-color: #e6e7eb;
-    -fx-border-radius: 10;
     -fx-padding: 5;
-    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.18), 14, 0, 0, 4);
 }
 
 .symbol-flyout .button {
     -fx-padding: 5 12 5 8;
 }
 
-.style-popup {
-    -fx-background-color: #ffffff;
-    -fx-background-radius: 10;
-    -fx-border-color: #e6e7eb;
-    -fx-border-radius: 10;
-    -fx-padding: 10;
-    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.18), 14, 0, 0, 4);
+.toolbar-caption {
+    -fx-text-fill: -c-muted;
+    -fx-padding: 0 4 0 6;
 }
 
-.toolbar-caption {
-    -fx-text-fill: #8a8d93;
-    -fx-padding: 0 4 0 6;
+/* Generic labels (popups, panels) */
+.label {
+    -fx-text-fill: -c-text;
+}
+
+.check-box {
+    -fx-text-fill: -c-text;
+}
+
+.check-box .box {
+    -fx-background-color: -c-field-bg;
+    -fx-border-color: -c-field-border;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+
+.check-box:selected .box {
+    -fx-background-color: -c-accent;
+    -fx-border-color: -c-accent;
 }
 
 /* Side panel (layers) */
 .side-panel {
-    -fx-background-color: #ffffff;
-    -fx-border-color: #e6e7eb;
+    -fx-background-color: -c-surface;
+    -fx-border-color: -c-border;
     -fx-border-width: 0 0 0 1;
 }
 
 .panel-title {
     -fx-font-weight: bold;
-    -fx-text-fill: #23252a;
+    -fx-text-fill: -c-text-strong;
 }
 
 .layer-row:hover {
-    -fx-background-color: #f2f4f7;
+    -fx-background-color: -c-hover;
     -fx-background-radius: 4;
 }
 
 .layer-row-active {
-    -fx-background-color: #e7f0ff;
+    -fx-background-color: -c-accent-soft;
     -fx-background-radius: 4;
 }
 
 /* Inputs */
 .text-field,
 .spinner .text-field {
-    -fx-background-color: white;
+    -fx-background-color: -c-field-bg;
+    -fx-text-fill: -c-text;
     -fx-background-radius: 6;
-    -fx-border-color: #d7d9de;
+    -fx-border-color: -c-field-border;
     -fx-border-width: 1;
     -fx-border-radius: 6;
     -fx-padding: 3 6 3 6;
 }
 
 .text-field:focused {
-    -fx-border-color: -accent;
+    -fx-border-color: -c-accent;
 }
 
 .spinner {
     -fx-background-radius: 6;
 }
 
+.spinner .increment-arrow-button,
+.spinner .decrement-arrow-button {
+    -fx-background-color: -c-hover;
+}
+
+.spinner .increment-arrow,
+.spinner .decrement-arrow {
+    -fx-background-color: -c-icon;
+}
+
 .color-picker {
-    -fx-background-color: transparent;
+    -fx-background-color: -c-hover;
     -fx-background-radius: 6;
+    -fx-text-fill: -c-text;
+}
+
+.color-picker .label {
+    -fx-text-fill: -c-text;
 }

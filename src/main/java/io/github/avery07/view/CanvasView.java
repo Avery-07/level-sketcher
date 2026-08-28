@@ -242,6 +242,13 @@ public final class CanvasView extends StackPane implements CanvasContext {
 
     // ----- other public actions -----
 
+    /** Repaint the canvas (and its inspector popup) in the given light/dark theme. */
+    public void setTheme(io.github.avery07.ui.Theme theme) {
+        renderer.setTheme(theme);
+        inspector.setTheme(theme);
+        requestRender();
+    }
+
     /** Toggle multi-select: while on, clicks accumulate a selection you can move/delete together. */
     public void setMultiSelect(boolean on) {
         multiSelect = on;
