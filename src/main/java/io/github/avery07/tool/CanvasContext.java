@@ -44,6 +44,9 @@ public interface CanvasContext {
     /** The style newly drawn shapes should adopt. */
     Style currentStyle();
 
+    /** Whether freehand strokes should be smoothed as they are committed. */
+    boolean freehandSmooth();
+
     /** Run a command through the undo manager and mark the document dirty. */
     void execute(Command command);
 

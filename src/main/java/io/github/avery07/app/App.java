@@ -105,6 +105,7 @@ public final class App extends Application {
     private final PauseTransition flyoutHide = new PauseTransition(Duration.millis(180));
     private Popup stylePopup;           // stroke/fill/width, shown next to the active shape tool
     private Node styleFillControls;     // the fill row, hidden for tools without a fill (freehand)
+    private Node styleSmoothControls;   // the freehand-only "smooth" row, hidden for other tools
 
     @Override
     public void start(Stage stage) {
@@ -430,10 +431,15 @@ public final class App extends Application {
         VBox fillBox = new VBox(4, fillOn, fill);
         styleFillControls = fillBox;
 
+        CheckBox smoothOn = new CheckBox(Messages.get("style.smooth"));
+        smoothOn.setSelected(canvas.isFreehandSmooth());
+        smoothOn.setOnAction(e -> canvas.setFreehandSmooth(smoothOn.isSelected()));
+        styleSmoothControls = smoothOn;
+
         Label caption = new Label(Messages.get("style.caption"));
         caption.getStyleClass().add("toolbar-caption");
         VBox content = new VBox(6, caption, new Label(Messages.get("style.stroke")), stroke, fillBox,
-                new Label(Messages.get("style.width")), width);
+                new Label(Messages.get("style.width")), width, smoothOn);
         content.getStyleClass().add("style-popup");
         content.setPrefWidth(150);
         themePopupContent(content);
@@ -455,11 +461,14 @@ public final class App extends Application {
                 return;
             }
         }
+        boolean withSmooth = action == Action.FREEHAND; // smoothing applies only to freehand
         // Rebuild the popup from scratch on every activation: fresh controls carry no
         // uncommitted text and, crucially, no keyboard focus lingering on a text field.
         buildStylePopup();
         styleFillControls.setVisible(withFill);
         styleFillControls.setManaged(withFill);
+        styleSmoothControls.setVisible(withSmooth);
+        styleSmoothControls.setManaged(withSmooth);
         stylePopup.hide();
         var b = anchor.localToScreen(anchor.getLayoutBounds());
         stylePopup.show(anchor, b.getMaxX() + 6, b.getMinY());

@@ -100,6 +100,7 @@ public final class CanvasView extends StackPane implements CanvasContext {
     // Snapping helpers (session state, like multi-select).
     private boolean gridSnap;
     private boolean objectSnap;
+    private boolean freehandSmooth; // smooth freehand strokes as they are drawn
     private boolean altBypass; // Alt held on the current gesture disables snapping
     private final List<ObjectSnap.Guide> alignGuidesWorld = new ArrayList<>(); // world-space, transient
     // Release cooldown so a snapped object can be dragged away freely instead of hopping between
@@ -265,6 +266,16 @@ public final class CanvasView extends StackPane implements CanvasContext {
     public void setObjectSnap(boolean on) {
         objectSnap = on;
         requestFocus();
+    }
+
+    /** Toggle freehand smoothing: strokes drawn while on are rounded as they are committed. */
+    public void setFreehandSmooth(boolean on) {
+        freehandSmooth = on;
+        requestFocus();
+    }
+
+    public boolean isFreehandSmooth() {
+        return freehandSmooth;
     }
 
     /** Whether grid snapping is in effect for the current gesture (Alt disables it). */
@@ -447,6 +458,11 @@ public final class CanvasView extends StackPane implements CanvasContext {
     @Override
     public io.github.avery07.model.Style currentStyle() {
         return document.currentStyle();
+    }
+
+    @Override
+    public boolean freehandSmooth() {
+        return freehandSmooth;
     }
 
     @Override
