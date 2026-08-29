@@ -1,5 +1,6 @@
 package io.github.avery07.app;
 
+import io.github.avery07.ui.Messages;
 import javafx.scene.input.KeyCode;
 
 import java.util.ArrayList;
@@ -39,8 +40,9 @@ public final class KeyBindings {
             this.editionOnly = editionOnly;
         }
 
+        /** Localised action name; the English constant is the fallback if a key is missing. */
         public String label() {
-            return label;
+            return Messages.getOr("action." + name(), label);
         }
 
         public KeyCode defaultKey() {

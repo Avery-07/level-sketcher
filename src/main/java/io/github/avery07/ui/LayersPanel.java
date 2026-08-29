@@ -60,12 +60,12 @@ public final class LayersPanel extends VBox {
         getChildren().clear();
         Sheet sheet = document.selectedSheet();
         if (sheet == null) {
-            Label hint = new Label("Select a sheet to edit its layers");
+            Label hint = new Label(Messages.get("layers.selectSheet"));
             hint.setWrapText(true);
             getChildren().add(hint);
             return;
         }
-        getChildren().add(title("Layers"));
+        getChildren().add(title(Messages.get("layers.title")));
         getChildren().add(buttonBar(sheet));
         var layers = sheet.layers();
         for (int i = layers.size() - 1; i >= 0; i--) { // topmost layer first

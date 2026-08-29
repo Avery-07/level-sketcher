@@ -72,9 +72,9 @@ public final class WorkspaceRenderer {
         return theme.palette();
     }
 
-    /** The fill of a sheet's paper. Centralised so a future per-sheet colour can override the theme. */
+    /** The fill of a sheet's paper: its own colour if set, otherwise the theme default. */
     private Color sheetFill(Sheet s) {
-        return p().sheetFill();
+        return s.color() != null ? Color.web(s.color()) : p().sheetFill();
     }
 
     public void renderContent(GraphicsContext g, double w, double h) {

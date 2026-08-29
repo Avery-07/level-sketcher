@@ -33,6 +33,7 @@ public final class Sheet {
     private double top;
     private double right;
     private double bottom;
+    private String color;     // hex paper colour, or null to use the theme's default
     private final List<Layer> layers = new ArrayList<>();
     private Layer activeLayer;
 
@@ -114,6 +115,15 @@ public final class Sheet {
         this.bottom = bottom;
     }
 
+    /** The sheet's paper colour as a hex string, or {@code null} to follow the current theme. */
+    public String color() {
+        return color;
+    }
+
+    public void setColor(String color) {
+        this.color = color;
+    }
+
     public double width() {
         return right - left;
     }
@@ -172,6 +182,7 @@ public final class Sheet {
         c.top = top;
         c.right = right;
         c.bottom = bottom;
+        c.color = color;
         c.layers.clear();
         Layer activeCopy = null;
         for (Layer layer : layers) {

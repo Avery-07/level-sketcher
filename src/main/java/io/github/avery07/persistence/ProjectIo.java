@@ -69,6 +69,9 @@ public final class ProjectIo {
         n.put("scale", s.scale());
         ArrayNode bounds = n.putArray("bounds");
         bounds.add(s.left()).add(s.top()).add(s.right()).add(s.bottom());
+        if (s.color() != null) {
+            n.put("color", s.color());
+        }
         n.put("activeLayer", s.layers().indexOf(s.activeLayer()));
         ArrayNode layers = n.putArray("layers");
         for (Layer l : s.layers()) {
@@ -171,6 +174,9 @@ public final class ProjectIo {
         s.setBottom(bottom);
         s.setRotation(n.path("rotation").asDouble());
         s.setScale(n.path("scale").asDouble(1));
+        if (n.hasNonNull("color")) {
+            s.setColor(n.path("color").asText());
+        }
         s.layers().clear();
         for (JsonNode ln : n.path("layers")) {
             s.layers().add(readLayer(ln, library));

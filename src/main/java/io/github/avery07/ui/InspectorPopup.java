@@ -2,6 +2,7 @@ package io.github.avery07.ui;
 
 import io.github.avery07.command.RenameSheetCommand;
 import io.github.avery07.command.RenameSymbolCommand;
+import io.github.avery07.command.SetSheetColorCommand;
 import io.github.avery07.command.SetImageRectCommand;
 import io.github.avery07.command.SetStyleCommand;
 import io.github.avery07.command.SetSymbolParamsCommand;
@@ -44,6 +45,7 @@ public final class InspectorPopup {
     private final Popup popup = new Popup();
     private final VBox content = new VBox(8);
     private final LayersPanel layers;
+    private Theme theme = Theme.LIGHT; // used as the starting colour when a sheet has no custom one
 
     public InspectorPopup(Document document) {
         this.document = document;
@@ -66,6 +68,7 @@ public final class InspectorPopup {
 
     /** Repaint the popup's chrome in the given theme (its CSS resolves from this class). */
     public void setTheme(Theme theme) {
+        this.theme = theme;
         content.getStyleClass().removeAll(Theme.LIGHT.styleClass(), Theme.DARK.styleClass());
         content.getStyleClass().add(theme.styleClass());
     }
@@ -109,7 +112,7 @@ public final class InspectorPopup {
         Style style = element.style();
 
         ColorPicker stroke = new ColorPicker(Color.web(style.stroke()));
-        CheckBox fillOn = new CheckBox("Fill");
+        CheckBox fillOn = new CheckBox(Messages.get("inspector.fill"));
         fillOn.setSelected(style.fill() != null);
         ColorPicker fill = new ColorPicker(style.fill() != null ? Color.web(style.fill()) : Color.LIGHTGRAY);
         Spinner<Double> width = new Spinner<>();
@@ -126,10 +129,10 @@ public final class InspectorPopup {
         width.valueProperty().addListener((o, ov, nv) -> apply.run());
 
         content.getChildren().addAll(
-                labeled("Stroke", stroke),
+                labeled(Messages.get("inspector.stroke"), stroke),
                 fillOn,
-                labeled("Fill colour", fill),
-                labeled("Stroke width", width));
+                labeled(Messages.get("inspector.fillColour"), fill),
+                labeled(Messages.get("inspector.strokeWidth"), width));
     }
 
     private void applyStyle(Element element, Color stroke, Color fill, double width) {
@@ -152,7 +155,7 @@ public final class InspectorPopup {
                 document.markDirty();
             }
         });
-        content.getChildren().add(labeled("Name", name));
+        content.getChildren().add(labeled(Messages.get("inspector.name"), name));
 
         for (ParameterDef def : sym.type().parameters()) {
             Spinner<Double> spinner = new Spinner<>();
@@ -173,7 +176,7 @@ public final class InspectorPopup {
                 document.markDirty();
             }
         });
-        content.getChildren().add(labeled("Colour", colour));
+        content.getChildren().add(labeled(Messages.get("inspector.colour"), colour));
     }
 
     private void applyParam(SymbolInstance sym, String key, double value) {
@@ -187,7 +190,7 @@ public final class InspectorPopup {
     }
 
     private void buildSheet(Sheet sheet) {
-        content.getChildren().add(title("Sheet"));
+        content.getChildren().add(title(Messages.get("inspector.sheet")));
         TextField name = new TextField(sheet.name());
         name.setOnAction(e -> {
             String text = name.getText().trim();
@@ -196,21 +199,45 @@ public final class InspectorPopup {
                 document.markDirty();
             }
         });
-        content.getChildren().addAll(labeled("Name", name), new Separator(), layers);
+
+        // Paper colour: off follows the theme's default; on uses the picked colour. The picker
+        // starts from the theme's paper colour so enabling it doesn't jump to an unrelated shade.
+        CheckBox customOn = new CheckBox(Messages.get("inspector.customColour"));
+        customOn.setSelected(sheet.color() != null);
+        ColorPicker colour = new ColorPicker(sheet.color() != null
+                ? Color.web(sheet.color()) : theme.palette().sheetFill());
+        colour.setMaxWidth(Double.MAX_VALUE);
+        colour.setDisable(sheet.color() == null);
+        Runnable apply = () -> {
+            colour.setDisable(!customOn.isSelected());
+            applySheetColor(sheet, customOn.isSelected() ? Colors.toHex(colour.getValue()) : null);
+        };
+        customOn.setOnAction(e -> apply.run());
+        colour.setOnAction(e -> apply.run());
+
+        content.getChildren().addAll(labeled(Messages.get("inspector.name"), name), customOn, labeled(Messages.get("inspector.colour"), colour),
+                new Separator(), layers);
+    }
+
+    private void applySheetColor(Sheet sheet, String color) {
+        if (!java.util.Objects.equals(color, sheet.color())) {
+            document.undoManager().execute(new SetSheetColorCommand(sheet, sheet.color(), color));
+            document.markDirty();
+        }
     }
 
     private void buildText(TextElement t) {
-        content.getChildren().add(title("Text"));
+        content.getChildren().add(title(Messages.get("inspector.text")));
         TextField field = new TextField(t.content());
         field.setOnAction(e -> applyText(t, field.getText(), t.fontSize()));
-        content.getChildren().add(labeled("Content", field));
+        content.getChildren().add(labeled(Messages.get("inspector.content"), field));
 
         Spinner<Double> size = new Spinner<>();
         size.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(6, 400, t.fontSize(), 2));
         size.setEditable(true);
         size.setMaxWidth(Double.MAX_VALUE);
         size.valueProperty().addListener((o, ov, nv) -> applyText(t, t.content(), nv));
-        content.getChildren().add(labeled("Size", size));
+        content.getChildren().add(labeled(Messages.get("inspector.size"), size));
 
         ColorPicker colour = new ColorPicker(Color.web(t.style().stroke()));
         colour.setOnAction(e -> {
@@ -220,7 +247,7 @@ public final class InspectorPopup {
                 document.markDirty();
             }
         });
-        content.getChildren().add(labeled("Colour", colour));
+        content.getChildren().add(labeled(Messages.get("inspector.colour"), colour));
     }
 
     private void applyText(TextElement t, String newContent, double newSize) {
@@ -232,7 +259,7 @@ public final class InspectorPopup {
     }
 
     private void buildImage(ImageElement img) {
-        content.getChildren().add(title("Image"));
+        content.getChildren().add(title(Messages.get("inspector.image")));
         Spinner<Double> w = new Spinner<>();
         w.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 100000, img.width(), 10));
         w.setEditable(true);
@@ -243,7 +270,8 @@ public final class InspectorPopup {
         h.setMaxWidth(Double.MAX_VALUE);
         w.valueProperty().addListener((o, ov, nv) -> applyImageSize(img, nv, img.height()));
         h.valueProperty().addListener((o, ov, nv) -> applyImageSize(img, img.width(), nv));
-        content.getChildren().addAll(labeled("Width", w), labeled("Height", h));
+        content.getChildren().addAll(labeled(Messages.get("inspector.width"), w),
+                labeled(Messages.get("inspector.height"), h));
     }
 
     private void applyImageSize(ImageElement img, double w, double h) {
@@ -256,12 +284,12 @@ public final class InspectorPopup {
 
     private static String typeName(Element e) {
         return switch (e) {
-            case EditablePolygon p -> "Polygon (" + p.vertices().size() + " vertices)";
-            case Circle c -> "Circle";
-            case FreehandStroke f -> "Freehand stroke";
-            case SymbolInstance sym -> sym.type().name();
-            case TextElement t -> "Text";
-            case ImageElement img -> "Image";
+            case EditablePolygon p -> Messages.get("inspector.type.polygon", p.vertices().size());
+            case Circle c -> Messages.get("inspector.type.circle");
+            case FreehandStroke f -> Messages.get("inspector.type.freehand");
+            case SymbolInstance sym -> sym.type().name(); // user-set name, not translated
+            case TextElement t -> Messages.get("inspector.type.text");
+            case ImageElement img -> Messages.get("inspector.type.image");
         };
     }
 

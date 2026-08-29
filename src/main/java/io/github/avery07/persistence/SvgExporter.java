@@ -40,8 +40,10 @@ public final class SvgExporter {
             for (Vec2 c : corners) {
                 b.record(c);
             }
+            String paper = s.color() != null ? s.color() : "#ffffff";
             body.append("  <polygon points=\"").append(pointList(corners))
-                    .append("\" fill=\"#ffffff\" stroke=\"#c2c6cd\" stroke-width=\"1\"/>\n");
+                    .append("\" fill=\"").append(paper)
+                    .append("\" stroke=\"#c2c6cd\" stroke-width=\"1\"/>\n");
             Vec2 tl = corners.get(0);
             body.append(text(tl.x(), tl.y() - 6, s.name(), "#6b7280"));
 

@@ -41,7 +41,7 @@ public final class SymbolsDialog {
         Stage stage = new Stage();
         stage.initOwner(owner);
         stage.initModality(Modality.APPLICATION_MODAL);
-        stage.setTitle("Manage Symbols");
+        stage.setTitle(Messages.get("symbols.title"));
 
         VBox rows = new VBox(8);
         Runnable[] rebuild = new Runnable[1];
@@ -57,7 +57,7 @@ public final class SymbolsDialog {
         scroll.setFitToWidth(true);
         scroll.setPrefViewportHeight(240);
 
-        Button reset = new Button("Reset to Defaults");
+        Button reset = new Button(Messages.get("symbols.reset"));
         reset.setOnAction(e -> {
             library.resetToDefaults();
             rebuild[0].run();
@@ -65,11 +65,11 @@ public final class SymbolsDialog {
         });
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        Button close = new Button("Close");
+        Button close = new Button(Messages.get("common.close"));
         close.setOnAction(e -> stage.close());
         HBox buttons = new HBox(8, reset, spacer, close);
 
-        VBox root = new VBox(14, title("Symbols"), scroll,
+        VBox root = new VBox(14, title(Messages.get("symbols.heading")), scroll,
                 new Separator(), buildAddRow(library, rebuild[0], onChange), buttons);
         root.setPadding(new Insets(18));
         root.setPrefWidth(460);
@@ -114,7 +114,7 @@ public final class SymbolsDialog {
             onChange.run();
         });
 
-        Button remove = new Button("Remove");
+        Button remove = new Button(Messages.get("symbols.remove"));
         remove.setDisable(library.types().size() <= 1); // keep at least one type
         remove.setOnAction(e -> {
             library.remove(type);
@@ -130,7 +130,7 @@ public final class SymbolsDialog {
     /** The "add a symbol" form: name, placement pattern, colour. */
     private static Node buildAddRow(SymbolLibrary library, Runnable rebuild, Runnable onChange) {
         TextField name = new TextField();
-        name.setPromptText("New symbol name");
+        name.setPromptText(Messages.get("symbols.newName"));
         name.setPrefWidth(150);
         HBox.setHgrow(name, Priority.ALWAYS);
 
@@ -151,7 +151,7 @@ public final class SymbolsDialog {
 
         ColorPicker color = new ColorPicker(Color.web("#22c55e"));
 
-        Button add = new Button("Add");
+        Button add = new Button(Messages.get("symbols.add"));
         Runnable doAdd = () -> {
             String n = name.getText().trim();
             if (n.isEmpty()) {
@@ -166,7 +166,7 @@ public final class SymbolsDialog {
         add.setOnAction(e -> doAdd.run());
         name.setOnAction(e -> doAdd.run());
 
-        VBox box = new VBox(6, new Label("Add a symbol"),
+        VBox box = new VBox(6, new Label(Messages.get("symbols.addHeading")),
                 new HBox(10, name, pattern, color, add));
         ((HBox) box.getChildren().get(1)).setAlignment(Pos.CENTER_LEFT);
         return box;
@@ -174,10 +174,10 @@ public final class SymbolsDialog {
 
     private static String patternLabel(PlacementPattern p) {
         return switch (p) {
-            case MARKER -> "Marker";
-            case REGION -> "Region";
-            case PATH -> "Path";
-            case PARAMETRIC -> "Cone";
+            case MARKER -> Messages.get("pattern.marker");
+            case REGION -> Messages.get("pattern.region");
+            case PATH -> Messages.get("pattern.path");
+            case PARAMETRIC -> Messages.get("pattern.cone");
         };
     }
 

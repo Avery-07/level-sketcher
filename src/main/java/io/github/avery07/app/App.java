@@ -9,6 +9,8 @@ import io.github.avery07.persistence.ProjectIo;
 import io.github.avery07.persistence.SvgExporter;
 import io.github.avery07.ui.Colors;
 import io.github.avery07.ui.Icons;
+import io.github.avery07.ui.Language;
+import io.github.avery07.ui.Messages;
 import io.github.avery07.ui.ShortcutsDialog;
 import io.github.avery07.ui.SymbolsDialog;
 import io.github.avery07.ui.Theme;
@@ -34,6 +36,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.RadioMenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
@@ -83,6 +86,7 @@ public final class App extends Application {
     private final KeyBindings bindings = new KeyBindings();
     private final Preferences prefs = Preferences.userRoot().node("io/github/avery07/levelsketcher/prefs");
     private Theme theme = Theme.LIGHT;
+    private Language language = Language.ENGLISH;
     private CheckMenuItem darkModeItem;
     private final Map<Action, ToggleButton> actionButtons = new EnumMap<>(Action.class);
     private final Map<Action, Runnable> actionRunnables = new EnumMap<>(Action.class);
@@ -105,6 +109,8 @@ public final class App extends Application {
     @Override
     public void start(Stage stage) {
         this.stage = stage;
+        this.language = loadLanguage();
+        Messages.setLanguage(language); // must precede any UI construction below
         canvas = new CanvasView(document);
 
         BorderPane root = new BorderPane();
@@ -140,32 +146,47 @@ public final class App extends Application {
     }
 
     private MenuBar buildMenuBar() {
-        Menu file = new Menu("File");
-        MenuItem open = menuItem("Open…", "Shortcut+O", this::openFile);
-        MenuItem save = menuItem("Save", "Shortcut+S", this::saveFile);
-        MenuItem saveAs = menuItem("Save As…", "Shortcut+Shift+S", this::saveFileAs);
-        MenuItem importImg = menuItem("Import Image…", null, this::importImage);
-        MenuItem exportPng = menuItem("Export Image (PNG)…", null, this::exportImage);
-        MenuItem exportSvg = menuItem("Export SVG…", null, this::exportSvg);
-        MenuItem exportJson = menuItem("Export JSON…", null, this::exportJson);
+        Menu file = new Menu(Messages.get("menu.file"));
+        MenuItem open = menuItem(Messages.get("menu.file.open"), "Shortcut+O", this::openFile);
+        MenuItem save = menuItem(Messages.get("menu.file.save"), "Shortcut+S", this::saveFile);
+        MenuItem saveAs = menuItem(Messages.get("menu.file.saveAs"), "Shortcut+Shift+S", this::saveFileAs);
+        MenuItem importImg = menuItem(Messages.get("menu.file.importImage"), null, this::importImage);
+        MenuItem exportPng = menuItem(Messages.get("menu.file.exportPng"), null, this::exportImage);
+        MenuItem exportSvg = menuItem(Messages.get("menu.file.exportSvg"), null, this::exportSvg);
+        MenuItem exportJson = menuItem(Messages.get("menu.file.exportJson"), null, this::exportJson);
         file.getItems().addAll(open, save, saveAs, new SeparatorMenuItem(),
                 importImg, new SeparatorMenuItem(), exportPng, exportSvg, exportJson);
 
-        darkModeItem = new CheckMenuItem("Dark Mode");
+        darkModeItem = new CheckMenuItem(Messages.get("menu.settings.darkMode"));
         darkModeItem.setSelected(theme == Theme.DARK);
         darkModeItem.setOnAction(e -> applyTheme(darkModeItem.isSelected() ? Theme.DARK : Theme.LIGHT));
 
-        Menu settings = new Menu("Settings");
+        Menu settings = new Menu(Messages.get("menu.settings"));
         settings.getItems().addAll(
-                menuItem("Manage Symbols…", null,
+                menuItem(Messages.get("menu.settings.manageSymbols"), null,
                         () -> SymbolsDialog.show(stage, document.symbolLibrary(), this::refreshSymbols)),
                 new SeparatorMenuItem(),
                 darkModeItem,
-                menuItem("Keyboard Shortcuts…", null,
+                buildLanguageMenu(),
+                menuItem(Messages.get("menu.settings.shortcuts"), null,
                         () -> ShortcutsDialog.show(stage, bindings))
         );
 
         return new MenuBar(file, settings);
+    }
+
+    /** A submenu to pick the UI language; the choice applies on the next launch. */
+    private Menu buildLanguageMenu() {
+        Menu menu = new Menu(Messages.get("menu.settings.language"));
+        ToggleGroup group = new ToggleGroup();
+        for (Language lang : Language.values()) {
+            RadioMenuItem item = new RadioMenuItem(lang.displayName());
+            item.setToggleGroup(group);
+            item.setSelected(lang == language);
+            item.setOnAction(e -> chooseLanguage(lang));
+            menu.getItems().add(item);
+        }
+        return menu;
     }
 
     private VBox buildToolPalette() {
@@ -208,15 +229,15 @@ public final class App extends Application {
     }
 
     private static String modeLabel(EditorMode mode) {
-        return mode == EditorMode.ASSEMBLY ? "Assembly" : "Edition";
+        return Messages.get(mode == EditorMode.ASSEMBLY ? "mode.assembly" : "mode.edition");
     }
 
     /** All tools in one vertical column: sheet actions, then the drawing tools. */
     private Node buildToolColumn() {
-        addSheetButton = actionButton(Icons.addSheet(), "Add a sheet — then click or drag", canvas::armAddSheet);
+        addSheetButton = actionButton(Icons.addSheet(), Messages.get("tooltip.addSheet"), canvas::armAddSheet);
         VBox column = new VBox(4,
                 addSheetButton,
-                actionButton(Icons.trash(), "Delete selection (Del)", canvas::deleteSelected),
+                actionButton(Icons.trash(), Messages.get("tooltip.deleteSelection"), canvas::deleteSelected),
                 toolButton(Icons.rectangle(), Action.RECTANGLE, canvas::useRectangleTool),
                 toolButton(Icons.circle(), Action.CIRCLE, canvas::useCircleTool),
                 toolButton(Icons.polygon(), Action.POLYGON, canvas::usePolygonTool),
@@ -259,7 +280,7 @@ public final class App extends Application {
     private void updateSymbolButtonGraphic() {
         SymbolType t = defaultSymbol();
         symbolButton.setGraphic(Icons.symbol(t.pattern(), t.color()));
-        symbolButton.setTooltip(new Tooltip("Place " + t.name() + " — hover for other symbols"));
+        symbolButton.setTooltip(new Tooltip(Messages.get("tooltip.placeSymbol", t.name())));
     }
 
     /** Activate a symbol tool, remember it as the last used, and reflect it on the button. */
@@ -329,8 +350,7 @@ public final class App extends Application {
         multiSelectButton = new ToggleButton();
         multiSelectButton.setGraphic(Icons.multiSelect());
         multiSelectButton.setPrefWidth(TOOL_BUTTON_WIDTH);
-        multiSelectButton.setTooltip(new Tooltip(
-                "Select multiple — drag a box to add, drag a selected item to move, right-click to clear"));
+        multiSelectButton.setTooltip(new Tooltip(Messages.get("tooltip.multiSelect")));
         multiSelectButton.setOnAction(e -> {
             boolean on = multiSelectButton.isSelected();
             if (on) {
@@ -377,8 +397,8 @@ public final class App extends Application {
     }
 
     private Node buildEditColumn() {
-        Button undo = glyphButton("↶", "Undo (Ctrl+Z)", canvas::undo);
-        Button redo = glyphButton("↷", "Redo (Ctrl+Y)", canvas::redo);
+        Button undo = glyphButton("↶", Messages.get("tooltip.undo"), canvas::undo);
+        Button redo = glyphButton("↷", Messages.get("tooltip.redo"), canvas::redo);
         VBox column = new VBox(4, undo, redo);
         column.setAlignment(Pos.CENTER);
         return column;
@@ -389,7 +409,7 @@ public final class App extends Application {
         Style style = document.currentStyle();
         ColorPicker stroke = new ColorPicker(Color.web(style.stroke()));
         stroke.setMaxWidth(Double.MAX_VALUE);
-        CheckBox fillOn = new CheckBox("Fill");
+        CheckBox fillOn = new CheckBox(Messages.get("style.fill"));
         fillOn.setSelected(style.fill() != null);
         ColorPicker fill = new ColorPicker(style.fill() != null ? Color.web(style.fill()) : Color.web("#cfe0ff"));
         fill.setMaxWidth(Double.MAX_VALUE);
@@ -410,9 +430,10 @@ public final class App extends Application {
         VBox fillBox = new VBox(4, fillOn, fill);
         styleFillControls = fillBox;
 
-        Label caption = new Label("Style");
+        Label caption = new Label(Messages.get("style.caption"));
         caption.getStyleClass().add("toolbar-caption");
-        VBox content = new VBox(6, caption, new Label("Stroke"), stroke, fillBox, new Label("Width"), width);
+        VBox content = new VBox(6, caption, new Label(Messages.get("style.stroke")), stroke, fillBox,
+                new Label(Messages.get("style.width")), width);
         content.getStyleClass().add("style-popup");
         content.setPrefWidth(150);
         themePopupContent(content);
@@ -461,6 +482,27 @@ public final class App extends Application {
         } catch (RuntimeException ex) {
             return Theme.LIGHT; // unknown/unavailable preference — fall back to light
         }
+    }
+
+    private Language loadLanguage() {
+        try {
+            return Language.valueOf(prefs.get("language", Language.ENGLISH.name()));
+        } catch (RuntimeException ex) {
+            return Language.ENGLISH; // unknown/unavailable preference — fall back to English
+        }
+    }
+
+    /** Remember the chosen UI language (applied on the next launch) and tell the user. */
+    private void chooseLanguage(Language chosen) {
+        if (chosen == language) {
+            return;
+        }
+        language = chosen;
+        prefs.put("language", chosen.name());
+        Alert alert = new Alert(Alert.AlertType.INFORMATION, Messages.get("language.restartMessage"));
+        alert.setTitle(Messages.get("language.restartTitle"));
+        alert.setHeaderText(null);
+        alert.showAndWait();
     }
 
     /** Switch the whole app (chrome + canvas) to a theme and remember the choice. */
@@ -613,12 +655,14 @@ public final class App extends Application {
 
     /** Refresh every tooltip that shows a shortcut so it reflects the current bindings. */
     private void refreshShortcutHints() {
-        actionButtons.forEach((a, b) -> b.setTooltip(new Tooltip(a.label() + "  (" + bindings.keyText(a) + ")")));
-        modeSelector.setTooltip(new Tooltip("Assembly / Edition  (toggle with " + bindings.keyText(Action.TOGGLE_MODE) + ")"));
-        gridSnapButton.setTooltip(new Tooltip("Snap to the sheet grid — drawing, moving, editing  ("
-                + bindings.keyText(Action.GRID_SNAP) + ").  Hold Alt to disable."));
-        objectSnapButton.setTooltip(new Tooltip("Snap a dragged object to others' edges and centres  ("
-                + bindings.keyText(Action.OBJECT_SNAP) + ").  Hold Alt to disable."));
+        actionButtons.forEach((a, b) -> b.setTooltip(
+                new Tooltip(Messages.get("tooltip.actionKey", a.label(), bindings.keyText(a)))));
+        modeSelector.setTooltip(new Tooltip(
+                Messages.get("mode.tooltip", bindings.keyText(Action.TOGGLE_MODE))));
+        gridSnapButton.setTooltip(new Tooltip(
+                Messages.get("tooltip.gridSnap", bindings.keyText(Action.GRID_SNAP))));
+        objectSnapButton.setTooltip(new Tooltip(
+                Messages.get("tooltip.objectSnap", bindings.keyText(Action.OBJECT_SNAP))));
     }
 
     private MenuItem menuItem(String text, String accelerator, Runnable action) {
@@ -633,7 +677,7 @@ public final class App extends Application {
     // ----- file actions -----
 
     private void openFile() {
-        File file = projectChooser("Open Project").showOpenDialog(stage);
+        File file = projectChooser(Messages.get("chooser.open")).showOpenDialog(stage);
         if (file == null) {
             return;
         }
@@ -645,7 +689,7 @@ public final class App extends Application {
             document.markClean();
             canvas.frameContent();
         } catch (IOException | RuntimeException ex) {
-            error("Could not open the file", ex);
+            error(Messages.get("error.open"), ex);
         }
     }
 
@@ -659,7 +703,7 @@ public final class App extends Application {
     }
 
     private void saveFileAs() {
-        FileChooser chooser = projectChooser("Save Project");
+        FileChooser chooser = projectChooser(Messages.get("chooser.save"));
         chooser.setInitialFileName("untitled.lsk");
         File file = chooser.showSaveDialog(stage);
         if (file != null) {
@@ -673,51 +717,54 @@ public final class App extends Application {
             document.setFile(path);
             document.markClean();
         } catch (IOException ex) {
-            error("Could not save the file", ex);
+            error(Messages.get("error.save"), ex);
         }
     }
 
     private void exportImage() {
-        File file = chooseSave("Export Image", "PNG image", "*.png", "sketch.png");
+        File file = chooseSave(Messages.get("chooser.exportImage"), Messages.get("chooser.filter.png"),
+                "*.png", "sketch.png");
         if (file == null) {
             return;
         }
         try {
             ImageIO.write(SwingFXUtils.fromFXImage(canvas.snapshotContent(), null), "png", file);
         } catch (IOException ex) {
-            error("Could not export the image", ex);
+            error(Messages.get("error.exportImage"), ex);
         }
     }
 
     private void exportSvg() {
-        File file = chooseSave("Export SVG", "SVG image", "*.svg", "sketch.svg");
+        File file = chooseSave(Messages.get("chooser.exportSvg"), Messages.get("chooser.filter.svg"),
+                "*.svg", "sketch.svg");
         if (file == null) {
             return;
         }
         try {
             java.nio.file.Files.writeString(file.toPath(), SvgExporter.export(document));
         } catch (IOException ex) {
-            error("Could not export the SVG", ex);
+            error(Messages.get("error.exportSvg"), ex);
         }
     }
 
     private void exportJson() {
-        File file = chooseSave("Export JSON", "JSON", "*.json", "sketch.json");
+        File file = chooseSave(Messages.get("chooser.exportJson"), Messages.get("chooser.filter.json"),
+                "*.json", "sketch.json");
         if (file == null) {
             return;
         }
         try {
             ProjectIo.save(document, file.toPath()); // structured export; doesn't change the current file
         } catch (IOException ex) {
-            error("Could not export the JSON", ex);
+            error(Messages.get("error.exportJson"), ex);
         }
     }
 
     private void importImage() {
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("Import Image");
+        chooser.setTitle(Messages.get("chooser.importImage"));
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(
-                "Images", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp"));
+                Messages.get("chooser.filter.images"), "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp"));
         File file = chooser.showOpenDialog(stage);
         if (file == null) {
             return;
@@ -726,7 +773,7 @@ public final class App extends Application {
             byte[] data = java.nio.file.Files.readAllBytes(file.toPath());
             javafx.scene.image.Image img = new javafx.scene.image.Image(new java.io.ByteArrayInputStream(data));
             if (img.isError()) {
-                error("Could not read the image", img.getException());
+                error(Messages.get("error.readImage"), img.getException());
                 return;
             }
             String n = file.getName().toLowerCase();
@@ -734,12 +781,12 @@ public final class App extends Application {
                     : n.endsWith(".gif") ? "gif" : n.endsWith(".bmp") ? "bmp" : "png";
             if (!canvas.importImage(data, format, img.getWidth(), img.getHeight())) {
                 Alert alert = new Alert(Alert.AlertType.INFORMATION,
-                        "Add a sheet first, then import an image onto it.");
+                        Messages.get("dialog.importNeedSheet"));
                 alert.setHeaderText(null);
                 alert.showAndWait();
             }
         } catch (IOException ex) {
-            error("Could not import the image", ex);
+            error(Messages.get("error.importImage"), ex);
         }
     }
 
@@ -755,7 +802,7 @@ public final class App extends Application {
         FileChooser chooser = new FileChooser();
         chooser.setTitle(title);
         chooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter("LevelSketcher project", "*.lsk"));
+                new FileChooser.ExtensionFilter(Messages.get("chooser.filter.project"), "*.lsk"));
         return chooser;
     }
 
@@ -763,7 +810,7 @@ public final class App extends Application {
         if (!document.isDirty()) {
             return;
         }
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Save changes before closing?",
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, Messages.get("dialog.saveBeforeClose"),
                 ButtonType.YES, ButtonType.NO, ButtonType.CANCEL);
         alert.setHeaderText(null);
         var result = alert.showAndWait();
@@ -791,7 +838,7 @@ public final class App extends Application {
 
     /** Window title with the unsaved-changes indicator (spec §7.9). */
     private static String titleFor(Document doc) {
-        String name = doc.file() == null ? "Untitled" : doc.file().getFileName().toString();
+        String name = doc.file() == null ? Messages.get("title.untitled") : doc.file().getFileName().toString();
         return (doc.isDirty() ? "• " : "") + name + " — " + APP_NAME;
     }
 }

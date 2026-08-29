@@ -33,7 +33,7 @@ public final class ShortcutsDialog {
         Stage stage = new Stage();
         stage.initOwner(owner);
         stage.initModality(Modality.APPLICATION_MODAL);
-        stage.setTitle("Keyboard Shortcuts");
+        stage.setTitle(Messages.get("shortcuts.title"));
 
         GridPane grid = new GridPane();
         grid.setHgap(16);
@@ -53,22 +53,21 @@ public final class ShortcutsDialog {
                     keyButtons.get(capturing[0]).setText(bindings.keyText(capturing[0]));
                 }
                 capturing[0] = a;
-                keyButton.setText("Press a key…");
+                keyButton.setText(Messages.get("shortcuts.pressKey"));
             });
             keyButtons.put(a, keyButton);
             grid.add(keyButton, 1, row);
             row++;
         }
 
-        Label hint = new Label("Click a shortcut, then press a key.  "
-                + "Esc cancels · Backspace/Delete unbinds.");
+        Label hint = new Label(Messages.get("shortcuts.hint"));
         hint.setWrapText(true);
 
-        Button restore = new Button("Restore Defaults");
+        Button restore = new Button(Messages.get("shortcuts.restore"));
         restore.setOnAction(e -> bindings.resetDefaults());
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        Button close = new Button("Close");
+        Button close = new Button(Messages.get("common.close"));
         close.setOnAction(e -> stage.close());
         HBox buttons = new HBox(8, restore, spacer, close);
 
