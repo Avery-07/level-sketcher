@@ -14,6 +14,7 @@ import io.github.avery07.ui.Messages;
 import io.github.avery07.ui.ShortcutsDialog;
 import io.github.avery07.ui.SymbolsDialog;
 import io.github.avery07.ui.Theme;
+import io.github.avery07.ui.UiScale;
 import javafx.animation.PauseTransition;
 import io.github.avery07.view.CanvasView;
 import javafx.application.Application;
@@ -65,6 +66,8 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.prefs.Preferences;
 
 /**
@@ -75,8 +78,10 @@ import java.util.prefs.Preferences;
 public final class App extends Application {
 
     private static final String APP_NAME = "LevelSketcher";
-    private static final double TOOL_BUTTON_WIDTH = 48; // compact, uniform icon buttons
-    private static final double TOOLBAR_WIDTH = 116;     // narrow, fixed palette width
+    // Base chrome metrics at 100% UI size; multiplied by the current UI-size factor.
+    private static final double BASE_TOOL_BUTTON_WIDTH = 48; // compact, uniform icon buttons
+    private static final double BASE_TOOLBAR_WIDTH = 116;    // narrow, fixed palette width
+    private static final double BASE_FONT = 13;              // root font size in px
 
     /** Lighter default stroke for new shapes in dark mode, so drawings show up on dark paper. */
     private static final Style DARK_STROKE_DEFAULT = new Style("#e6e6e6", null, 2.0);
@@ -87,6 +92,7 @@ public final class App extends Application {
     private final Preferences prefs = Preferences.userRoot().node("io/github/avery07/levelsketcher/prefs");
     private Theme theme = Theme.LIGHT;
     private Language language = Language.ENGLISH;
+    private UiScale uiScale = UiScale.NORMAL;
     private CheckMenuItem darkModeItem;
     private final Map<Action, ToggleButton> actionButtons = new EnumMap<>(Action.class);
     private final Map<Action, Runnable> actionRunnables = new EnumMap<>(Action.class);
@@ -110,8 +116,10 @@ public final class App extends Application {
     @Override
     public void start(Stage stage) {
         this.stage = stage;
-        this.language = loadLanguage();
+        this.language = loadEnumPref("language", Language.ENGLISH);
         Messages.setLanguage(language); // must precede any UI construction below
+        this.uiScale = loadEnumPref("uiScale", UiScale.NORMAL);
+        applyIconScale(); // set icon scale before the palette (and its icons) are built
         canvas = new CanvasView(document);
 
         BorderPane root = new BorderPane();
@@ -137,7 +145,8 @@ public final class App extends Application {
         syncModeUi();
 
         stage.setScene(scene);
-        applyTheme(loadTheme()); // restore the saved light/dark preference (scene now attached)
+        applyTheme(loadEnumPref("theme", Theme.LIGHT)); // restore saved light/dark (scene attached)
+        applyUiFont();           // root font size follows the UI-size factor (needs the scene)
         stage.setTitle(titleFor(document));
         document.addChangeListener(() -> stage.setTitle(titleFor(document)));
         stage.setOnCloseRequest(this::confirmClose);
@@ -168,6 +177,7 @@ public final class App extends Application {
                         () -> SymbolsDialog.show(stage, document.symbolLibrary(), this::refreshSymbols)),
                 new SeparatorMenuItem(),
                 darkModeItem,
+                buildUiSizeMenu(),
                 buildLanguageMenu(),
                 menuItem(Messages.get("menu.settings.shortcuts"), null,
                         () -> ShortcutsDialog.show(stage, bindings))
@@ -176,15 +186,28 @@ public final class App extends Application {
         return new MenuBar(file, settings);
     }
 
+    /** A submenu to pick the chrome size; the choice applies live. */
+    private Menu buildUiSizeMenu() {
+        return radioSubmenu("menu.settings.uiSize", UiScale.values(), uiScale,
+                size -> Messages.get("uiSize." + size.name()), this::applyUiScale);
+    }
+
     /** A submenu to pick the UI language; the choice applies on the next launch. */
     private Menu buildLanguageMenu() {
-        Menu menu = new Menu(Messages.get("menu.settings.language"));
+        return radioSubmenu("menu.settings.language", Language.values(), language,
+                Language::displayName, this::chooseLanguage);
+    }
+
+    /** A single-choice submenu of radio items over an enum's values, with the current one ticked. */
+    private <E> Menu radioSubmenu(String titleKey, E[] values, E current,
+                                  Function<E, String> label, Consumer<E> onSelect) {
+        Menu menu = new Menu(Messages.get(titleKey));
         ToggleGroup group = new ToggleGroup();
-        for (Language lang : Language.values()) {
-            RadioMenuItem item = new RadioMenuItem(lang.displayName());
+        for (E value : values) {
+            RadioMenuItem item = new RadioMenuItem(label.apply(value));
             item.setToggleGroup(group);
-            item.setSelected(lang == language);
-            item.setOnAction(e -> chooseLanguage(lang));
+            item.setSelected(value == current);
+            item.setOnAction(e -> onSelect.accept(value));
             menu.getItems().add(item);
         }
         return menu;
@@ -196,9 +219,9 @@ public final class App extends Application {
         palette.getStyleClass().add("tool-palette");
         palette.setPadding(new Insets(6));
         palette.setAlignment(Pos.TOP_CENTER);
-        palette.setPrefWidth(TOOLBAR_WIDTH);
-        palette.setMinWidth(TOOLBAR_WIDTH);
-        palette.setMaxWidth(TOOLBAR_WIDTH);
+        palette.setPrefWidth(toolbarWidth());
+        palette.setMinWidth(toolbarWidth());
+        palette.setMaxWidth(toolbarWidth());
         return palette;
     }
 
@@ -256,7 +279,7 @@ public final class App extends Application {
      */
     private Node buildSymbolButton() {
         symbolButton = new ToggleButton();
-        symbolButton.setPrefWidth(TOOL_BUTTON_WIDTH);
+        symbolButton.setPrefWidth(toolButtonWidth());
         symbolButton.setToggleGroup(toolGroup);
         drawButtons.add(symbolButton); // a content tool: disabled in Assembly, like the drawing tools
         updateSymbolButtonGraphic();
@@ -350,7 +373,7 @@ public final class App extends Application {
     private Node buildMultiSelectButton() {
         multiSelectButton = new ToggleButton();
         multiSelectButton.setGraphic(Icons.multiSelect());
-        multiSelectButton.setPrefWidth(TOOL_BUTTON_WIDTH);
+        multiSelectButton.setPrefWidth(toolButtonWidth());
         multiSelectButton.setTooltip(new Tooltip(Messages.get("tooltip.multiSelect")));
         multiSelectButton.setOnAction(e -> {
             boolean on = multiSelectButton.isSelected();
@@ -367,12 +390,12 @@ public final class App extends Application {
     private Node buildSnapButtons() {
         gridSnapButton = new ToggleButton();
         gridSnapButton.setGraphic(Icons.gridSnap());
-        gridSnapButton.setPrefWidth(TOOL_BUTTON_WIDTH);
+        gridSnapButton.setPrefWidth(toolButtonWidth());
         gridSnapButton.setOnAction(e -> canvas.setGridSnap(gridSnapButton.isSelected()));
 
         objectSnapButton = new ToggleButton();
         objectSnapButton.setGraphic(Icons.objectSnap());
-        objectSnapButton.setPrefWidth(TOOL_BUTTON_WIDTH);
+        objectSnapButton.setPrefWidth(toolButtonWidth());
         objectSnapButton.setOnAction(e -> canvas.setObjectSnap(objectSnapButton.isSelected()));
 
         VBox column = new VBox(4, gridSnapButton, objectSnapButton);
@@ -485,19 +508,12 @@ public final class App extends Application {
 
     // ----- theming -----
 
-    private Theme loadTheme() {
+    /** Read an enum-valued preference, falling back to {@code fallback} if it's unset or unknown. */
+    private <E extends Enum<E>> E loadEnumPref(String key, E fallback) {
         try {
-            return Theme.valueOf(prefs.get("theme", Theme.LIGHT.name()));
+            return Enum.valueOf(fallback.getDeclaringClass(), prefs.get(key, fallback.name()));
         } catch (RuntimeException ex) {
-            return Theme.LIGHT; // unknown/unavailable preference — fall back to light
-        }
-    }
-
-    private Language loadLanguage() {
-        try {
-            return Language.valueOf(prefs.get("language", Language.ENGLISH.name()));
-        } catch (RuntimeException ex) {
-            return Language.ENGLISH; // unknown/unavailable preference — fall back to English
+            return fallback;
         }
     }
 
@@ -512,6 +528,60 @@ public final class App extends Application {
         alert.setTitle(Messages.get("language.restartTitle"));
         alert.setHeaderText(null);
         alert.showAndWait();
+    }
+
+    // Toolbar metrics derived from the current UI-size factor (read by the palette builders).
+    private double toolButtonWidth() {
+        return BASE_TOOL_BUTTON_WIDTH * uiScale.factor();
+    }
+
+    private double toolbarWidth() {
+        return BASE_TOOLBAR_WIDTH * uiScale.factor();
+    }
+
+    /** Push the current UI-size factor into the icon scale (icons read it when they are built). */
+    private void applyIconScale() {
+        Icons.setScale(Icons.BASE_SCALE * uiScale.factor());
+    }
+
+    /** Set the root font size from the UI-size factor; the scene must already be attached. */
+    private void applyUiFont() {
+        stage.getScene().getRoot().setStyle("-fx-font-size: " + (BASE_FONT * uiScale.factor()) + "px;");
+    }
+
+    /** Resize the whole chrome live: font, icons, and a rebuilt tool palette. */
+    private void applyUiScale(UiScale size) {
+        if (size == uiScale) {
+            return;
+        }
+        uiScale = size;
+        prefs.put("uiScale", size.name());
+        applyIconScale();
+        applyUiFont();
+        rebuildToolPalette();
+    }
+
+    /**
+     * Rebuild the left tool palette in place so the new sizes take effect. The shared collections
+     * and toggle group the builders populate are reset first, and the active tool is cleared so no
+     * stale button reference lingers.
+     */
+    private void rebuildToolPalette() {
+        canvas.clearTool();
+        toolGroup.selectToggle(null);
+        hideStylePopup();
+        if (symbolFlyout != null) {
+            symbolFlyout.hide();
+            symbolFlyout = null;
+        }
+        actionButtons.clear();
+        actionRunnables.clear();
+        drawButtons.clear();
+        toolGroup.getToggles().clear();
+        ((BorderPane) stage.getScene().getRoot()).setLeft(buildToolPalette());
+        syncModeUi();           // re-apply per-mode enablement to the fresh buttons
+        refreshShortcutHints(); // re-apply tooltips to the fresh buttons
+        canvas.requestFocus();
     }
 
     /** Switch the whole app (chrome + canvas) to a theme and remember the choice. */
@@ -556,7 +626,7 @@ public final class App extends Application {
     private ToggleButton toolButton(Node icon, Action action, Runnable activate) {
         ToggleButton button = new ToggleButton();
         button.setGraphic(icon);
-        button.setPrefWidth(TOOL_BUTTON_WIDTH);
+        button.setPrefWidth(toolButtonWidth());
         button.setToggleGroup(toolGroup);
         button.setOnAction(e -> {
             if (button.isSelected()) {
@@ -577,7 +647,7 @@ public final class App extends Application {
     private Button actionButton(Node icon, String tip, Runnable action) {
         Button button = new Button();
         button.setGraphic(icon);
-        button.setPrefWidth(TOOL_BUTTON_WIDTH);
+        button.setPrefWidth(toolButtonWidth());
         button.setTooltip(new Tooltip(tip));
         button.setOnAction(e -> action.run());
         return button;

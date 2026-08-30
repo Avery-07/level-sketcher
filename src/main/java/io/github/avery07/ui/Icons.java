@@ -19,10 +19,18 @@ import javafx.scene.shape.StrokeLineJoin;
  */
 public final class Icons {
 
-    /** Uniform scale applied to every icon (designed at ~16px, enlarged for the toolbar). */
-    private static final double SCALE = 1.6;
+    /** Base uniform scale for every icon (designed at ~16px, enlarged for the toolbar). */
+    public static final double BASE_SCALE = 1.6;
+
+    /** Live icon scale; multiplied by the UI-size factor. Icons read this when they are built. */
+    private static double scale = BASE_SCALE;
 
     private Icons() {
+    }
+
+    /** Set the icon scale (base × UI-size factor). Affects icons built after this call. */
+    public static void setScale(double value) {
+        scale = value;
     }
 
     public static Node rectangle() {
@@ -99,8 +107,8 @@ public final class Icons {
 
     private static Node styled(Node shape) {
         shape.getStyleClass().add("tool-icon");
-        shape.setScaleX(SCALE);
-        shape.setScaleY(SCALE);
+        shape.setScaleX(scale);
+        shape.setScaleY(scale);
         // Wrap so the (scaled) size is reflected in layout bounds, sizing the button correctly.
         return new Group(shape);
     }
@@ -159,8 +167,8 @@ public final class Icons {
 
     /** Scale and wrap like {@link #styled}, but without the grey {@code .tool-icon} tint. */
     private static Node scaled(Node node) {
-        node.setScaleX(SCALE);
-        node.setScaleY(SCALE);
+        node.setScaleX(scale);
+        node.setScaleY(scale);
         return new Group(node);
     }
 }
