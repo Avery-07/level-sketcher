@@ -4,8 +4,6 @@ LevelSketcher is a lightweight 2D level design tool for quickly sketching and or
 
 The goal is to make it easy to experiment with level layouts before moving on to a full game engine or 3D editor.
 
-Built with JavaFX on Java 21.
-
 ## Download & run
 
 Get the latest build from the [**Releases**](https://github.com/Avery-07/level-sketcher/releases) page.
