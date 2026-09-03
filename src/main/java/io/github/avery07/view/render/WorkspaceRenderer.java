@@ -77,6 +77,35 @@ public final class WorkspaceRenderer {
         return s.color() != null ? Color.web(s.color()) : p().sheetFill();
     }
 
+    // For a custom-coloured sheet the theme's grid/label/border may not read on the chosen paper,
+    // so they are derived from the fill's luminance instead; default sheets keep the tuned palette.
+    private Color gridColor(Sheet s) {
+        return s.color() != null ? contrastTint(sheetFill(s), 0.10) : p().grid();
+    }
+
+    private Color labelColor(Sheet s) {
+        return s.color() != null ? contrastTint(sheetFill(s), 0.55) : p().label();
+    }
+
+    private Color borderColor(Sheet s) {
+        return s.color() != null ? contrastTint(sheetFill(s), 0.32) : p().border();
+    }
+
+    private Color activeTabLabel(Sheet s) {
+        return s.color() != null ? contrastTint(sheetFill(s), 0.65) : p().tabLabelActive();
+    }
+
+    /** Shift {@code base} toward black or white (whichever contrasts) by {@code t} in [0,1]. */
+    private static Color contrastTint(Color base, double t) {
+        return base.interpolate(isLight(base) ? Color.BLACK : Color.WHITE, t);
+    }
+
+    /** Whether a colour is light enough that dark ink reads better on it than light ink. */
+    private static boolean isLight(Color c) {
+        double luminance = 0.2126 * c.getRed() + 0.7152 * c.getGreen() + 0.0722 * c.getBlue();
+        return luminance >= 0.5;
+    }
+
     public void renderContent(GraphicsContext g, double w, double h) {
         g.setTransform(1, 0, 0, 1, 0, 0);
         g.setFill(p().background());
@@ -166,14 +195,14 @@ public final class WorkspaceRenderer {
         g.setFill(sheetFill(s));
         g.fillPolygon(xs, ys, 4);
 
-        drawGrid(g, s);
+        drawGrid(g, s, gridColor(s));
 
         // Label in screen space at a fixed size, so it never distorts with the sheet.
-        g.setFill(p().label());
+        g.setFill(labelColor(s));
         g.setFont(LABEL_FONT);
         g.fillText(s.name(), tl.x() + LABEL_DX, tl.y() + LABEL_DY);
 
-        g.setStroke(p().border());
+        g.setStroke(borderColor(s));
         g.setLineWidth(1);
         g.strokePolygon(xs, ys, 4);
     }
@@ -218,9 +247,9 @@ public final class WorkspaceRenderer {
             }
             g.setFill(isActive ? sheetFill(s) : p().tabFill());
             g.fill();
-            g.setStroke(p().border());
+            g.setStroke(isActive ? borderColor(s) : p().border());
             g.stroke(); // strokes the path as drawn — the active tab's bottom stays open
-            g.setFill(isActive ? p().tabLabelActive() : p().tabLabelInactive());
+            g.setFill(isActive ? activeTabLabel(s) : p().tabLabelInactive());
             g.fillText(String.valueOf(t.index() + 1), (x + right) / 2, (top + bottom) / 2 + 1);
         }
         g.setTextAlign(javafx.scene.text.TextAlignment.LEFT); // restore for the next sheet's name
@@ -247,7 +276,7 @@ public final class WorkspaceRenderer {
      *       move — the frame just reveals or clips more of the same lattice.</li>
      * </ul>
      */
-    private void drawGrid(GraphicsContext g, Sheet s) {
+    private void drawGrid(GraphicsContext g, Sheet s, Color gridColor) {
         double cell = GRID_BASE * s.scale();
         if (cell <= 1e-6) {
             return;
@@ -265,7 +294,7 @@ public final class WorkspaceRenderer {
         if (kMax - kMin > MAX_GRID_LINES || mMax - mMin > MAX_GRID_LINES) {
             return;
         }
-        g.setStroke(p().grid());
+        g.setStroke(gridColor);
         g.setLineWidth(1);
         for (int k = kMin; k <= kMax; k++) {
             Vec2 base = origin.add(ax.scale(k * cell));
