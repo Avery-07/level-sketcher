@@ -29,7 +29,7 @@ public final class ShortcutsDialog {
     private ShortcutsDialog() {
     }
 
-    public static void show(Stage owner, KeyBindings bindings) {
+    public static void show(Stage owner, KeyBindings bindings, Theme theme) {
         Stage stage = new Stage();
         stage.initOwner(owner);
         stage.initModality(Modality.APPLICATION_MODAL);
@@ -83,6 +83,7 @@ public final class ShortcutsDialog {
         bindings.addListener(refresh);
         stage.setOnHidden(e -> bindings.removeListener(refresh));
 
+        root.getStyleClass().add(theme.styleClass()); // resolve the themed CSS colours
         Scene scene = new Scene(root);
         var css = ShortcutsDialog.class.getResource("/style.css");
         if (css != null) {

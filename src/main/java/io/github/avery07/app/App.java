@@ -174,13 +174,13 @@ public final class App extends Application {
         Menu settings = new Menu(Messages.get("menu.settings"));
         settings.getItems().addAll(
                 menuItem(Messages.get("menu.settings.manageSymbols"), null,
-                        () -> SymbolsDialog.show(stage, document.symbolLibrary(), this::refreshSymbols)),
+                        () -> SymbolsDialog.show(stage, document.symbolLibrary(), this::refreshSymbols, theme)),
                 new SeparatorMenuItem(),
                 darkModeItem,
                 buildUiSizeMenu(),
                 buildLanguageMenu(),
                 menuItem(Messages.get("menu.settings.shortcuts"), null,
-                        () -> ShortcutsDialog.show(stage, bindings))
+                        () -> ShortcutsDialog.show(stage, bindings, theme))
         );
 
         return new MenuBar(file, settings);

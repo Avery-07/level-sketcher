@@ -207,6 +207,12 @@
     -fx-border-color: -c-accent;
 }
 
+/* Scroll panes (e.g. the Symbols dialog) blend with the themed window background */
+.scroll-pane,
+.scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
 /* Side panel (layers) */
 .side-panel {
     -fx-background-color: -c-surface;

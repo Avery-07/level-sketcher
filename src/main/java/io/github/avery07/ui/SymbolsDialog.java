@@ -37,7 +37,7 @@ public final class SymbolsDialog {
     private SymbolsDialog() {
     }
 
-    public static void show(Stage owner, SymbolLibrary library, Runnable onChange) {
+    public static void show(Stage owner, SymbolLibrary library, Runnable onChange, Theme theme) {
         Stage stage = new Stage();
         stage.initOwner(owner);
         stage.initModality(Modality.APPLICATION_MODAL);
@@ -73,6 +73,7 @@ public final class SymbolsDialog {
                 new Separator(), buildAddRow(library, rebuild[0], onChange), buttons);
         root.setPadding(new Insets(18));
         root.setPrefWidth(460);
+        root.getStyleClass().add(theme.styleClass()); // resolve the themed CSS colours
 
         Scene scene = new Scene(root);
         var css = SymbolsDialog.class.getResource("/style.css");
