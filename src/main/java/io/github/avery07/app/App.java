@@ -61,6 +61,7 @@ import javafx.util.Duration;
 import javax.imageio.ImageIO;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -78,6 +79,7 @@ import java.util.prefs.Preferences;
 public final class App extends Application {
 
     private static final String APP_NAME = "LevelSketcher";
+    private static final int MAX_RECENT = 8; // most-recent project paths kept in File > Open Recent
     // Base chrome metrics at 100% UI size; multiplied by the current UI-size factor.
     private static final double BASE_TOOL_BUTTON_WIDTH = 48; // compact, uniform icon buttons
     private static final double BASE_TOOLBAR_WIDTH = 116;    // narrow, fixed palette width
@@ -94,6 +96,7 @@ public final class App extends Application {
     private Language language = Language.ENGLISH;
     private UiScale uiScale = UiScale.NORMAL;
     private CheckMenuItem darkModeItem;
+    private Menu recentMenu;
     private final Map<Action, ToggleButton> actionButtons = new EnumMap<>(Action.class);
     private final Map<Action, Runnable> actionRunnables = new EnumMap<>(Action.class);
     private final List<ButtonBase> drawButtons = new ArrayList<>();
@@ -164,7 +167,9 @@ public final class App extends Application {
         MenuItem exportPng = menuItem(Messages.get("menu.file.exportPng"), null, this::exportImage);
         MenuItem exportSvg = menuItem(Messages.get("menu.file.exportSvg"), null, this::exportSvg);
         MenuItem exportJson = menuItem(Messages.get("menu.file.exportJson"), null, this::exportJson);
-        file.getItems().addAll(open, save, saveAs, new SeparatorMenuItem(),
+        recentMenu = new Menu(Messages.get("menu.file.openRecent"));
+        rebuildRecentMenu();
+        file.getItems().addAll(open, recentMenu, save, saveAs, new SeparatorMenuItem(),
                 importImg, new SeparatorMenuItem(), exportPng, exportSvg, exportJson);
 
         darkModeItem = new CheckMenuItem(Messages.get("menu.settings.darkMode"));
@@ -765,16 +770,21 @@ public final class App extends Application {
 
     private void openFile() {
         File file = projectChooser(Messages.get("chooser.open")).showOpenDialog(stage);
-        if (file == null) {
-            return;
+        if (file != null) {
+            openProject(file.toPath());
         }
+    }
+
+    /** Load a project from a known path (the file chooser or the Open Recent list). */
+    private void openProject(Path path) {
         try {
-            ProjectIo.load(file.toPath(), document);
+            ProjectIo.load(path, document);
             document.undoManager().clear();
             document.clearSelection();
-            document.setFile(file.toPath());
+            document.setFile(path);
             document.markClean();
             canvas.frameContent();
+            addRecentFile(path);
         } catch (IOException | RuntimeException ex) {
             error(Messages.get("error.open"), ex);
         }
@@ -803,9 +813,70 @@ public final class App extends Application {
             ProjectIo.save(document, path);
             document.setFile(path);
             document.markClean();
+            addRecentFile(path);
         } catch (IOException ex) {
             error(Messages.get("error.save"), ex);
         }
+    }
+
+    // ----- recent files -----
+
+    private List<Path> recentFiles() {
+        List<Path> files = new ArrayList<>();
+        for (String line : prefs.get("recentFiles", "").split("\n")) {
+            if (!line.isBlank()) {
+                files.add(Path.of(line));
+            }
+        }
+        return files;
+    }
+
+    private void saveRecentFiles(List<Path> files) {
+        StringBuilder joined = new StringBuilder();
+        for (Path f : files) {
+            joined.append(f).append('\n');
+        }
+        prefs.put("recentFiles", joined.toString());
+    }
+
+    /** Move a just-opened/saved path to the front of the recent list, capped at {@link #MAX_RECENT}. */
+    private void addRecentFile(Path path) {
+        Path abs = path.toAbsolutePath().normalize();
+        List<Path> files = recentFiles();
+        files.removeIf(f -> f.equals(abs));
+        files.add(0, abs);
+        while (files.size() > MAX_RECENT) {
+            files.remove(files.size() - 1);
+        }
+        saveRecentFiles(files);
+        rebuildRecentMenu();
+    }
+
+    /** Rebuild the Open Recent submenu, dropping entries whose file no longer exists. */
+    private void rebuildRecentMenu() {
+        recentMenu.getItems().clear();
+        List<Path> files = recentFiles();
+        if (files.removeIf(f -> !Files.exists(f))) {
+            saveRecentFiles(files); // persist the pruning of deleted files
+        }
+        if (files.isEmpty()) {
+            MenuItem empty = new MenuItem(Messages.get("menu.file.recentEmpty"));
+            empty.setDisable(true);
+            recentMenu.getItems().add(empty);
+            return;
+        }
+        for (Path f : files) {
+            MenuItem item = new MenuItem(f.getFileName().toString());
+            item.setOnAction(e -> openProject(f));
+            recentMenu.getItems().add(item);
+        }
+        recentMenu.getItems().addAll(new SeparatorMenuItem(),
+                menuItem(Messages.get("menu.file.clearRecent"), null, this::clearRecentFiles));
+    }
+
+    private void clearRecentFiles() {
+        prefs.remove("recentFiles");
+        rebuildRecentMenu();
     }
 
     private void exportImage() {
