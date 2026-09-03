@@ -116,7 +116,7 @@ public final class App extends Application {
     @Override
     public void start(Stage stage) {
         this.stage = stage;
-        this.language = loadEnumPref("language", Language.ENGLISH);
+        this.language = initialLanguage();
         Messages.setLanguage(language); // must precede any UI construction below
         this.uiScale = loadEnumPref("uiScale", UiScale.NORMAL);
         applyIconScale(); // set icon scale before the palette (and its icons) are built
@@ -515,6 +515,14 @@ public final class App extends Application {
         } catch (RuntimeException ex) {
             return fallback;
         }
+    }
+
+    /** The saved UI language, or — on first run, before any choice — the OS language if shipped. */
+    private Language initialLanguage() {
+        if (prefs.get("language", null) == null) {
+            return Language.systemDefault();
+        }
+        return loadEnumPref("language", Language.ENGLISH);
     }
 
     /** Remember the chosen UI language (applied on the next launch) and tell the user. */

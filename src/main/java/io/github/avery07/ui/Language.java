@@ -25,4 +25,15 @@ public enum Language {
     public String displayName() {
         return displayName;
     }
+
+    /** The shipped language matching the OS default locale, or {@link #ENGLISH} if none does. */
+    public static Language systemDefault() {
+        String os = Locale.getDefault().getLanguage();
+        for (Language language : values()) {
+            if (language.locale.getLanguage().equals(os)) {
+                return language;
+            }
+        }
+        return ENGLISH;
+    }
 }
